@@ -103,3 +103,8 @@ zookeeper-client/zookeeper-client-c/generated/
 
 # Python
 *.py[cod]
+
+# debug conf
+conf/zoo.cfg
+conf/zoo*.cfg
+zookeeper-server/src/main/resources/logback.xml
