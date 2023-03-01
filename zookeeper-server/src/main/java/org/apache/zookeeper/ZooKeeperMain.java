@@ -126,6 +126,11 @@ public class ZooKeeperMain {
      */
     static class MyCommandOptions {
 
+        /**
+         * zk客户端启动参数指定的配置项 如
+         *   项             值
+         * server      127.0.0.1:2181
+         */
         private Map<String, String> options = new HashMap<String, String>();
         private List<String> cmdArgs = null;
         private String command = null;

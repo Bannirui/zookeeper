@@ -494,9 +494,9 @@ public class ZooKeeper implements AutoCloseable {
      *             if an invalid chroot path is specified
      */
     public ZooKeeper(
-        String connectString,
-        int sessionTimeout,
-        Watcher watcher,
+        String connectString, // 服务端地址
+        int sessionTimeout, // 超时时间
+        Watcher watcher, // 监控事件 将作为整个zk会话期间的上下文 一直被保存在客户端ZKWatchManager的defaultWatcher中
         ZKClientConfig conf) throws IOException {
         this(connectString, sessionTimeout, watcher, false, conf);
     }
@@ -1843,7 +1843,7 @@ public class ZooKeeper implements AutoCloseable {
      * @throws InterruptedException If the server transaction is interrupted.
      * @throws IllegalArgumentException if an invalid path is specified
      */
-    public Stat exists(final String path, Watcher watcher) throws KeeperException, InterruptedException {
+    public Stat exists(final String path, Watcher watcher) throws KeeperException, InterruptedException { // 向zk服务器注册Watcher
         final String clientPath = path;
         PathUtils.validatePath(clientPath);
 
@@ -1949,14 +1949,14 @@ public class ZooKeeper implements AutoCloseable {
      * @throws InterruptedException If the server transaction is interrupted.
      * @throws IllegalArgumentException if an invalid path is specified
      */
-    public byte[] getData(final String path, Watcher watcher, Stat stat) throws KeeperException, InterruptedException {
+    public byte[] getData(final String path, Watcher watcher, Stat stat) throws KeeperException, InterruptedException { // 向zk服务器注册Watcher
         final String clientPath = path;
         PathUtils.validatePath(clientPath);
 
         // the watch contains the un-chroot path
         WatchRegistration wcb = null;
         if (watcher != null) {
-            wcb = new DataWatchRegistration(watcher, clientPath);
+            wcb = new DataWatchRegistration(watcher, clientPath); // 保存watcher事件和节点的对应关系
         }
 
         final String serverPath = prependChroot(clientPath);
@@ -1965,9 +1965,9 @@ public class ZooKeeper implements AutoCloseable {
         h.setType(ZooDefs.OpCode.getData);
         GetDataRequest request = new GetDataRequest();
         request.setPath(serverPath);
-        request.setWatch(watcher != null);
+        request.setWatch(watcher != null); // 带有Watch事件请求 客户端将会话标记为带有Watch监控的事件请求
         GetDataResponse response = new GetDataResponse();
-        ReplyHeader r = cnxn.submitRequest(h, request, response, wcb);
+        ReplyHeader r = cnxn.submitRequest(h, request, response, wcb); // 客户端向服务端发送请求时 是将请求封装成一个Packet对象 将packet添加到一个等待发送队列outgoingQueue中
         if (r.getErr() != 0) {
             throw KeeperException.create(KeeperException.Code.get(r.getErr()), clientPath);
         }
@@ -2343,7 +2343,7 @@ public class ZooKeeper implements AutoCloseable {
      * @throws KeeperException If the server signals an error with a non-zero error code.
      * @throws IllegalArgumentException if an invalid path is specified
      */
-    public List<String> getChildren(final String path, Watcher watcher) throws KeeperException, InterruptedException {
+    public List<String> getChildren(final String path, Watcher watcher) throws KeeperException, InterruptedException { // 向zk服务器注册Watcher
         final String clientPath = path;
         PathUtils.validatePath(clientPath);
 

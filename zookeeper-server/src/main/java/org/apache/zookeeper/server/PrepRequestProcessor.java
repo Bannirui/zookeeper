@@ -756,6 +756,10 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         return path.substring(0, lastSlash);
     }
 
+    /**
+     * 乐观锁CAS思想的体现 读取 校验 写入
+     * version是-1标识着请求操作不使用乐观锁 忽略版本比对
+     */
     private static int checkAndIncVersion(int currentVersion, int expectedVersion, String path) throws KeeperException.BadVersionException {
         if (expectedVersion != -1 && expectedVersion != currentVersion) {
             throw new KeeperException.BadVersionException(path);

@@ -737,7 +737,7 @@ public class ClientCnxn {
     protected void finishPacket(Packet p) {
         int err = p.replyHeader.getErr();
         if (p.watchRegistration != null) {
-            p.watchRegistration.register(err);
+            p.watchRegistration.register(err); // 将Watch注册到ZKWatchManager中
         }
         // Add all the removed watch events to the event queue, so that the
         // clients will be notified with 'Data/Child WatchRemoved' event type.
@@ -1680,7 +1680,7 @@ public class ClientCnxn {
                 if (h.getType() == OpCode.closeSession) {
                     closing = true;
                 }
-                outgoingQueue.add(packet);
+                outgoingQueue.add(packet); // 等待发送队列
             }
         }
         sendThread.getClientCnxnSocket().packetAdded();
