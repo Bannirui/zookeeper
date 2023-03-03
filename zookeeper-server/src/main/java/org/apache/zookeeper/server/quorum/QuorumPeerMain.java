@@ -84,11 +84,12 @@ public class QuorumPeerMain {
      * To start the replicated server specify the configuration file name on
      * the command line.
      * @param args path to the configfile
+     * 服务端启动入口
      */
     public static void main(String[] args) {
         QuorumPeerMain main = new QuorumPeerMain();
         try {
-            main.initializeAndRun(args);
+            main.initializeAndRun(args); // cfg路径
         } catch (IllegalArgumentException e) {
             LOG.error("Invalid arguments, exiting abnormally", e);
             LOG.info(USAGE);
@@ -120,25 +121,30 @@ public class QuorumPeerMain {
     }
 
     protected void initializeAndRun(String[] args) throws ConfigException, IOException, AdminServerException {
+        /**
+         * 指定了配置文件
+         *   - 将配置文件中内容读取到Java的Properties中
+         *   - 将Properties中配置项解析到zk配置类中
+         */
         QuorumPeerConfig config = new QuorumPeerConfig();
         if (args.length == 1) {
-            config.parse(args[0]);
+            config.parse(args[0]); // 解析配置文件(服务端启动指定的)
         }
 
         // Start and schedule the the purge task
         DatadirCleanupManager purgeMgr = new DatadirCleanupManager(
-            config.getDataDir(),
-            config.getDataLogDir(),
-            config.getSnapRetainCount(),
-            config.getPurgeInterval());
-        purgeMgr.start();
+            config.getDataDir(), // 数据
+            config.getDataLogDir(), // 事务日志
+            config.getSnapRetainCount(), // 默认保存3个快照
+            config.getPurgeInterval()); // 设置n小时清理一次 0标识不用定时清理
+        purgeMgr.start(); // 文件清理器
 
         if (args.length == 1 && config.isDistributed()) {
-            runFromConfig(config);
+            runFromConfig(config); // 集群模式
         } else {
             LOG.warn("Either no config or no quorum defined in config, running in standalone mode");
             // there is only server in the quorum -- run as standalone
-            ZooKeeperServerMain.main(args);
+            ZooKeeperServerMain.main(args); // 单机模式
         }
     }
 

@@ -45,7 +45,7 @@ public class DatadirCleanupManager {
         COMPLETED
     }
 
-    private PurgeTaskStatus purgeTaskStatus = PurgeTaskStatus.NOT_STARTED;
+    private PurgeTaskStatus purgeTaskStatus = PurgeTaskStatus.NOT_STARTED; // 标识定时清理文件任务启动状态
 
     private final File snapDir;
 
@@ -104,9 +104,9 @@ public class DatadirCleanupManager {
 
         timer = new Timer("PurgeTask", true);
         TimerTask task = new PurgeTask(dataLogDir, snapDir, snapRetainCount);
-        timer.scheduleAtFixedRate(task, 0, TimeUnit.HOURS.toMillis(purgeInterval));
+        timer.scheduleAtFixedRate(task, 0, TimeUnit.HOURS.toMillis(purgeInterval)); // 定时任务
 
-        purgeTaskStatus = PurgeTaskStatus.STARTED;
+        purgeTaskStatus = PurgeTaskStatus.STARTED; // 标识定时清理文件任务已经启动
     }
 
     /**

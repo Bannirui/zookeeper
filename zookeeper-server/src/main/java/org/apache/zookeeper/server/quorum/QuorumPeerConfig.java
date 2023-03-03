@@ -184,14 +184,14 @@ public class QuorumPeerConfig {
 
             Properties cfg = new Properties();
             try (FileInputStream in = new FileInputStream(configFile)) {
-                cfg.load(in);
+                cfg.load(in); // 配置文件内容读取到Java的Properties里
                 configFileStr = path;
             }
 
             /* Read entire config file as initial configuration */
             initialConfig = new String(Files.readAllBytes(configFile.toPath()));
 
-            parseProperties(cfg);
+            parseProperties(cfg); // Java Properties里面的配置内容解析到zk配置类
         } catch (IOException e) {
             throw new ConfigException("Error processing " + path, e);
         } catch (IllegalArgumentException e) {

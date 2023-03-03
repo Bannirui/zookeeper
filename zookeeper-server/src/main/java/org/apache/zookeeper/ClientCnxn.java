@@ -315,6 +315,7 @@ public class ClientCnxn {
             this.watchRegistration = watchRegistration;
         }
 
+        // 将Packet对象进行序列化 进行网络传输
         public void createBB() {
             try {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
