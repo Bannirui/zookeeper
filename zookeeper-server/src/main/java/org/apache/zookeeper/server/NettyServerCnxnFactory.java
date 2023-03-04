@@ -113,8 +113,8 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
     private final ChannelGroup allChannels = new DefaultChannelGroup("zkServerCnxns", new DefaultEventExecutor());
     private final Map<InetAddress, AtomicInteger> ipMap = new ConcurrentHashMap<>();
     private InetSocketAddress localAddress;
-    private int maxClientCnxns = 60;
-    int listenBacklog = -1;
+    private int maxClientCnxns = 60; // 默认限制单台客户端到zk服务实例的连接数是60
+    int listenBacklog = -1; // 默认不限制Socket listen队列
     private final ClientX509Util x509Util;
 
     public static final String NETTY_ADVANCED_FLOW_CONTROL = "zookeeper.netty.advancedFlowControl.enabled";
@@ -611,10 +611,10 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
     public void configure(InetSocketAddress addr, int maxClientCnxns, int backlog, boolean secure) throws IOException {
         configureSaslLogin();
         initMaxCnxns();
-        localAddress = addr;
-        this.maxClientCnxns = maxClientCnxns;
+        localAddress = addr; // 服务端监听的Socket
+        this.maxClientCnxns = maxClientCnxns; // 限制单台客户端与单个zk服务器连接数
         this.secure = secure;
-        this.listenBacklog = backlog;
+        this.listenBacklog = backlog; // Socket listen队列
         LOG.info("configure {} secure: {} on addr {}", this, secure, addr);
     }
 
@@ -705,7 +705,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
             bootstrap.option(ChannelOption.SO_BACKLOG, listenBacklog);
         }
         LOG.info("binding to port {}", localAddress);
-        parentChannel = bootstrap.bind(localAddress).syncUninterruptibly().channel();
+        parentChannel = bootstrap.bind(localAddress).syncUninterruptibly().channel(); // netty服务端编程
         // Port changes after bind() if the original port was 0, update
         // localAddress to get the real port.
         localAddress = (InetSocketAddress) parentChannel.localAddress();
@@ -739,10 +739,13 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
 
     @Override
     public void startup(ZooKeeperServer zks, boolean startServer) throws IOException, InterruptedException {
+        // 启动netty
         start();
         setZooKeeperServer(zks);
         if (startServer) {
+            // 恢复本地数据
             zks.startdata();
+            // 启动会话管理器\注册请求处理链
             zks.startup();
         }
     }

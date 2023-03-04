@@ -98,6 +98,7 @@ public class ZooKeeperServerMain {
 
     protected void initializeAndRun(String[] args) throws ConfigException, IOException, AdminServerException {
         try {
+            // JMX注册
             ManagedUtil.registerLog4jMBeans();
         } catch (JMException e) {
             LOG.warn("Unable to register log4j JMX control", e);
@@ -121,6 +122,11 @@ public class ZooKeeperServerMain {
      */
     public void runFromConfig(ServerConfig config) throws IOException, AdminServerException {
         LOG.info("Starting server");
+        /**
+         * 文件处理器
+         *   - 快照数据
+         *   - 事务日志
+         */
         FileTxnSnapLog txnLog = null;
         try {
             try {
@@ -141,6 +147,7 @@ public class ZooKeeperServerMain {
             if (config.jvmPauseMonitorToRun) {
                 jvmPauseMonitor = new JvmPauseMonitor(config);
             }
+            // zk服务实例
             final ZooKeeperServer zkServer = new ZooKeeperServer(jvmPauseMonitor, txnLog, config.tickTime, config.minSessionTimeout, config.maxSessionTimeout, config.listenBacklog, null, config.initialConfig);
             txnLog.setServerStats(zkServer.serverStats());
 
@@ -156,8 +163,25 @@ public class ZooKeeperServerMain {
 
             boolean needStartZKServer = true;
             if (config.getClientPortAddress() != null) {
+                /**
+                 * 通信实现
+                 *   - NIOServerCnxnFactory 默认实现
+                 *   - NettyServerCnxnFactory
+                 * 通过VM options指定netty实现
+                 * -Dzookeeper.serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
+                 */
                 cnxnFactory = ServerCnxnFactory.createFactory();
+                /**
+                 * 给Socket开发设置必要的参数
+                 *   - 要监听的Socket地址
+                 *   - Socket listen队列大小
+                 */
                 cnxnFactory.configure(config.getClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), false);
+                /**
+                 * -netty服务端编程 启动主线程
+                 * -恢复本地数据
+                 * -启动会话管理器\注册请求处理链
+                 */
                 cnxnFactory.startup(zkServer);
                 // zkServer has been started. So we don't need to start it again in secureCnxnFactory.
                 needStartZKServer = false;

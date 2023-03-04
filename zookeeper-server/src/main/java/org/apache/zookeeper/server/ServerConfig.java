@@ -45,7 +45,7 @@ public class ServerConfig {
     protected File dataDir;
     protected File dataLogDir;
     protected int tickTime = ZooKeeperServer.DEFAULT_TICK_TIME;
-    protected int maxClientCnxns;
+    protected int maxClientCnxns; // 限制连接数 单台客户端与单个zk服务器之间的连接
     /** defaults to -1 if not set explicitly */
     protected int minSessionTimeout = -1;
     /** defaults to -1 if not set explicitly */
@@ -97,7 +97,7 @@ public class ServerConfig {
 
         // let qpconfig parse the file and then pull the stuff we are
         // interested in
-        readFrom(config);
+        readFrom(config); // 从quorum peer配置上同步需要的配置信息
     }
 
     /**

@@ -109,6 +109,11 @@ public abstract class ServerCnxnFactory {
         configure(addr, maxcc, backlog, false);
     }
 
+    /**
+     * @param addr zk服务端监听的Socket
+     * @param maxcc 连接数限制 单个客户端与单个zk服务器之间的连接
+     * @param backlog Socket listen的队列长度限制
+     */
     public abstract void configure(InetSocketAddress addr, int maxcc, int backlog, boolean secure) throws IOException;
 
     public abstract void reconfigure(InetSocketAddress addr);
@@ -143,7 +148,7 @@ public abstract class ServerCnxnFactory {
 
     public abstract void start();
 
-    protected ZooKeeperServer zkServer;
+    protected ZooKeeperServer zkServer; // zk服务实例
     public final void setZooKeeperServer(ZooKeeperServer zks) {
         this.zkServer = zks;
         if (zks != null) {

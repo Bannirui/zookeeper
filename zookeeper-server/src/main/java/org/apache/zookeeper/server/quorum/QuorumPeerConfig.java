@@ -70,7 +70,7 @@ public class QuorumPeerConfig {
     private static boolean standaloneEnabled = true;
     private static boolean reconfigEnabled = false;
 
-    protected InetSocketAddress clientPortAddress;
+    protected InetSocketAddress clientPortAddress; // zk服务端监听的Socket
     protected InetSocketAddress secureClientPortAddress;
     protected boolean sslQuorum = false;
     protected boolean shouldUsePortUnification = false;
@@ -79,7 +79,7 @@ public class QuorumPeerConfig {
     protected File dataDir;
     protected File dataLogDir;
     protected String dynamicConfigFileStr = null;
-    protected String configFileStr = null;
+    protected String configFileStr = null; // 配置文件
     protected int tickTime = ZooKeeperServer.DEFAULT_TICK_TIME;
     protected int maxClientCnxns = 60;
     /** defaults to -1 if not set explicitly */
@@ -285,7 +285,7 @@ public class QuorumPeerConfig {
             } else if (key.equals("dataLogDir")) {
                 dataLogDir = vff.create(value);
             } else if (key.equals("clientPort")) {
-                clientPort = Integer.parseInt(value);
+                clientPort = Integer.parseInt(value); // 配置文件中clientPort zk服务端口号
             } else if (key.equals("localSessionsEnabled")) {
                 localSessionsEnabled = parseBoolean(key, value);
             } else if (key.equals("localSessionsUpgradingEnabled")) {
@@ -436,7 +436,7 @@ public class QuorumPeerConfig {
             this.clientPortAddress = new InetSocketAddress(InetAddress.getByName(clientPortAddress), clientPort);
             LOG.info("clientPortAddress is {}", formatInetAddr(this.clientPortAddress));
         } else {
-            this.clientPortAddress = new InetSocketAddress(clientPort);
+            this.clientPortAddress = new InetSocketAddress(clientPort); // 没有在配置文件中指定网卡 绑定在本机所有网卡上
             LOG.info("clientPortAddress is {}", formatInetAddr(this.clientPortAddress));
         }
 

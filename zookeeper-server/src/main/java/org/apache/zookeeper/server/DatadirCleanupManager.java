@@ -47,15 +47,15 @@ public class DatadirCleanupManager {
 
     private PurgeTaskStatus purgeTaskStatus = PurgeTaskStatus.NOT_STARTED; // 标识定时清理文件任务启动状态
 
-    private final File snapDir;
+    private final File snapDir; // 内存数据快照
 
-    private final File dataLogDir;
+    private final File dataLogDir; // 事务日志
 
-    private final int snapRetainCount;
+    private final int snapRetainCount; // 保留下限
 
-    private final int purgeInterval;
+    private final int purgeInterval; // 定时任务间隔
 
-    private Timer timer;
+    private Timer timer; // 定时器 负责调度执行定时任务
 
     /**
      * Constructor of DatadirCleanupManager. It takes the parameters to schedule
@@ -92,18 +92,18 @@ public class DatadirCleanupManager {
      * @see PurgeTxnLog#purge(File, File, int)
      */
     public void start() {
-        if (PurgeTaskStatus.STARTED == purgeTaskStatus) {
+        if (PurgeTaskStatus.STARTED == purgeTaskStatus) { // 清理任务执行过就不要再启动
             LOG.warn("Purge task is already running.");
             return;
         }
         // Don't schedule the purge task with zero or negative purge interval.
-        if (purgeInterval <= 0) {
+        if (purgeInterval <= 0) { // 标识不启动定时任务
             LOG.info("Purge task is not scheduled.");
             return;
         }
 
-        timer = new Timer("PurgeTask", true);
-        TimerTask task = new PurgeTask(dataLogDir, snapDir, snapRetainCount);
+        timer = new Timer("PurgeTask", true); // 创建定时器
+        TimerTask task = new PurgeTask(dataLogDir, snapDir, snapRetainCount); // 文件清理任务
         timer.scheduleAtFixedRate(task, 0, TimeUnit.HOURS.toMillis(purgeInterval)); // 定时任务
 
         purgeTaskStatus = PurgeTaskStatus.STARTED; // 标识定时清理文件任务已经启动
@@ -129,9 +129,9 @@ public class DatadirCleanupManager {
         private int snapRetainCount;
 
         public PurgeTask(File dataDir, File snapDir, int count) {
-            logsDir = dataDir;
-            snapsDir = snapDir;
-            snapRetainCount = count;
+            logsDir = dataDir; // 事务日志
+            snapsDir = snapDir; // zk数据
+            snapRetainCount = count; // 保留几个
         }
 
         @Override

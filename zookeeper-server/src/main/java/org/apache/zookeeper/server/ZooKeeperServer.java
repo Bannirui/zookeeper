@@ -182,6 +182,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     /** Socket listen backlog. Value of -1 indicates unset */
     protected int listenBacklog = -1;
     protected SessionTracker sessionTracker;
+
+    /**
+     * 文件处理器
+     *   - 快照数据
+     *   - 事务日志
+     */
     private FileTxnSnapLog txnLogFactory = null;
     private ZKDatabase zkDb;
     private ResponseCache readResponseCache;
@@ -684,6 +690,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
     }
 
+    // 恢复本地数据
     public void startdata() throws IOException, InterruptedException {
         //check to see if zkDb is not null
         if (zkDb == null) {

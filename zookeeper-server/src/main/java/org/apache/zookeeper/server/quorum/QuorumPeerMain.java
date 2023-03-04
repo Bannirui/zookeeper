@@ -137,7 +137,7 @@ public class QuorumPeerMain {
             config.getDataLogDir(), // 事务日志
             config.getSnapRetainCount(), // 默认保存3个快照
             config.getPurgeInterval()); // 设置n小时清理一次 0标识不用定时清理
-        purgeMgr.start(); // 文件清理器
+        purgeMgr.start(); // 文件清理器 定时任务
 
         if (args.length == 1 && config.isDistributed()) {
             runFromConfig(config); // 集群模式
