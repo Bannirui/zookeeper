@@ -53,10 +53,10 @@ public class FileTxnSnapLog {
 
     //the directory containing the
     //the transaction logs
-    final File dataDir;
+    final File dataDir; // 事务日志
     //the directory containing the
     //the snapshot directory
-    final File snapDir;
+    final File snapDir; // 内存快照
     TxnLog txnLog;
     SnapShot snapLog;
     private final boolean autoCreateDB;
@@ -563,7 +563,7 @@ public class FileTxnSnapLog {
      * the most recent in front
      */
     public List<File> findNValidSnapshots(int n) {
-        FileSnap snaplog = new FileSnap(snapDir);
+        FileSnap snaplog = new FileSnap(snapDir); // 内存快照
         return snaplog.findNValidSnapshots(n);
     }
 

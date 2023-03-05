@@ -133,7 +133,7 @@ public class QuorumPeerMain {
 
         // Start and schedule the the purge task
         DatadirCleanupManager purgeMgr = new DatadirCleanupManager(
-            config.getDataDir(), // 数据
+            config.getDataDir(), // 内存数据快照
             config.getDataLogDir(), // 事务日志
             config.getSnapRetainCount(), // 默认保存3个快照
             config.getPurgeInterval()); // 设置n小时清理一次 0标识不用定时清理

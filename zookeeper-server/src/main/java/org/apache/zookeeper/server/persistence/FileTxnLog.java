@@ -317,12 +317,19 @@ public class FileTxnLog implements TxnLog, Closeable {
      * @return log files that starts at, or just before, the snapshot and subsequent ones
      */
     public static File[] getLogFiles(File[] logDirList, long snapshotZxid) {
-        List<File> files = Util.sortDataDir(logDirList, LOG_FILE_PREFIX, true);
+        List<File> files = Util.sortDataDir(logDirList, LOG_FILE_PREFIX, true); // 所有事务日志 zxid升序
+        /**
+         * 并不是所有<snapshotZxid的事务日志都要删除
+         * 对于事务日志而言 向前多兼容一个zxid版本
+         * 找到删除基准前一个zxid作为新的基准
+         * <新基准的事务日志都筛选出来删除
+         * >=新基准的事务日志保留
+         */
         long logZxid = 0;
         // Find the log file that starts before or at the same time as the
         // zxid of the snapshot
         for (File f : files) {
-            long fzxid = Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX);
+            long fzxid = Util.getZxidFromName(f.getName(), LOG_FILE_PREFIX); // 事务日志文件名中解析出zxid
             if (fzxid > snapshotZxid) {
                 break;
             }

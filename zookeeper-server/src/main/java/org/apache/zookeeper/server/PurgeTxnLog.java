@@ -77,18 +77,44 @@ public class PurgeTxnLog {
             throw new IllegalArgumentException(COUNT_ERR_MSG);
         }
 
-        FileTxnSnapLog txnLog = new FileTxnSnapLog(dataDir, snapDir);
+        FileTxnSnapLog txnLog = new FileTxnSnapLog(dataDir, snapDir); // 文件处理器
 
+        // zxid最大的num个快照文件 这些文件按照zxid降序排序好了
         List<File> snaps = txnLog.findNValidSnapshots(num);
         int numSnaps = snaps.size();
         if (numSnaps > 0) {
+            /**
+             * 要保留的快照文件中zxid最小的那个zxid为参考基准 设为x
+             *   - 快照文件
+             *     - zxid<x的删除
+             *     - zxid>=x的保留
+             *   - 事务日志 zxid比x小的评选为参考基准 设为y
+             *     - zxid<y的删除
+             *     - zxid>=y的保留
+             */
             purgeOlderSnapshots(txnLog, snaps.get(numSnaps - 1));
         }
     }
 
     // VisibleForTesting
+
+    /**
+     * snapShot这个快照文件用来提供一个删除文件的基准 假设这个参考的基准的zxid为x
+     * 要保留的快照文件中zxid最小的那个
+     *   - 快照文件
+     *     - zxid<x的删除
+     *     - zxid>=x的保留
+     *   - 事务日志 zxid比x小的评选为参考基准 设为y
+     *     - zxid<y的删除
+     *     - zxid>=y的保留
+     */
     static void purgeOlderSnapshots(FileTxnSnapLog txnLog, File snapShot) {
-        final long leastZxidToBeRetain = Util.getZxidFromName(snapShot.getName(), PREFIX_SNAPSHOT);
+        /**
+         * 删除文件的参考zxid
+         * 小于这个zxid的删除
+         * 大于等于这个zxid的保留
+         */
+        final long leastZxidToBeRetain = Util.getZxidFromName(snapShot.getName(), PREFIX_SNAPSHOT); // 从snapshot文件名中解析出zxid
 
         /**
          * We delete all files with a zxid in their name that is less than leastZxidToBeRetain.
@@ -109,40 +135,48 @@ public class PurgeTxnLog {
          * recoverability of all snapshots being retained.  We determine that log file here by
          * calling txnLog.getSnapshotLogs().
          */
+        // 要保留的事务日志
         final Set<File> retainedTxnLogs = new HashSet<File>();
-        retainedTxnLogs.addAll(Arrays.asList(txnLog.getSnapshotLogs(leastZxidToBeRetain)));
+        /**
+         * 并不是所有<snapshotZxid的事务日志都要删除
+         * 对于事务日志而言 向前多兼容一个zxid版本
+         * 找到删除基准前一个zxid作为新的基准
+         * <新基准的事务日志都筛选出来删除
+         * >=新基准的事务日志保留
+         */
+        retainedTxnLogs.addAll(Arrays.asList(txnLog.getSnapshotLogs(leastZxidToBeRetain))); // 根据zxid找出要保留的所有事务日志
 
         /**
          * Finds all candidates for deletion, which are files with a zxid in their name that is less
          * than leastZxidToBeRetain.  There's an exception to this rule, as noted above.
          */
-        class MyFileFilter implements FileFilter {
+        class MyFileFilter implements FileFilter { // 文件过滤器 过来出来的文件是要清理的
 
             private final String prefix;
             MyFileFilter(String prefix) {
                 this.prefix = prefix;
             }
             public boolean accept(File f) {
-                if (!f.getName().startsWith(prefix + ".")) {
+                if (!f.getName().startsWith(prefix + ".")) { // 要清理的文件的前缀
                     return false;
                 }
-                if (retainedTxnLogs.contains(f)) {
+                if (retainedTxnLogs.contains(f)) { // 看看是已经判定要保留
                     return false;
                 }
                 long fZxid = Util.getZxidFromName(f.getName(), prefix);
-                return fZxid < leastZxidToBeRetain;
+                return fZxid < leastZxidToBeRetain; // zxid保留阈值 在此之前的才能清理
             }
 
         }
         // add all non-excluded log files
-        File[] logs = txnLog.getDataDir().listFiles(new MyFileFilter(PREFIX_LOG));
+        File[] logs = txnLog.getDataDir().listFiles(new MyFileFilter(PREFIX_LOG)); // 过滤出所有要删除的事务日志文件
         List<File> files = new ArrayList<>();
         if (logs != null) {
             files.addAll(Arrays.asList(logs));
         }
 
         // add all non-excluded snapshot files to the deletion list
-        File[] snapshots = txnLog.getSnapDir().listFiles(new MyFileFilter(PREFIX_SNAPSHOT));
+        File[] snapshots = txnLog.getSnapDir().listFiles(new MyFileFilter(PREFIX_SNAPSHOT)); // 过滤出所有要删除的快照文件
         if (snapshots != null) {
             files.addAll(Arrays.asList(snapshots));
         }
@@ -157,7 +191,7 @@ public class PurgeTxnLog {
             LOG.info(msg);
             System.out.println(msg);
 
-            if (!f.delete()) {
+            if (!f.delete()) { // 删除文件
                 System.err.println("Failed to remove " + f.getPath());
             }
         }

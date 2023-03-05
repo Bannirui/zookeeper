@@ -159,6 +159,12 @@ public class FileSnap implements SnapShot {
      * less than n in case enough snapshots are not available).
      */
     protected List<File> findNValidSnapshots(int n) {
+        /**
+         * 内存快照存放目录下所有文件按照字典序排序
+         * 筛选文件前缀是snapshot
+         * 文件名称后缀zxid降序
+         * 也就意味着筛选出n个最大zxid的内存快照文件
+         */
         List<File> files = Util.sortDataDir(snapDir.listFiles(), SNAPSHOT_FILE_PREFIX, false);
         int count = 0;
         List<File> list = new ArrayList<File>();
@@ -167,7 +173,7 @@ public class FileSnap implements SnapShot {
             // from the valid snapshot and continue
             // until we find a valid one
             try {
-                if (SnapStream.isValidSnapshot(f)) {
+                if (SnapStream.isValidSnapshot(f)) { // snapshot文件校验合法性
                     list.add(f);
                     count++;
                     if (count == n) {
