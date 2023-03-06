@@ -138,7 +138,7 @@ public class ExpiryQueue<E> {
         long now = Time.currentElapsedTime();
         long expirationTime = nextExpirationTime.get();
         if (now < expirationTime) {
-            return Collections.emptySet();
+            return Collections.emptySet(); // 会话都还没过期
         }
 
         Set<E> set = null;

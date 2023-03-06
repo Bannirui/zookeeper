@@ -189,7 +189,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
      *   - 事务日志
      */
     private FileTxnSnapLog txnLogFactory = null;
-    private ZKDatabase zkDb;
+    private ZKDatabase zkDb; // 内存中的数据
     private ResponseCache readResponseCache;
     private ResponseCache getChildrenResponseCache;
     private final AtomicLong hzxid = new AtomicLong(0); // 维护着zk实例最大的zxid
@@ -536,6 +536,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         }
 
         // Clean up dead sessions
+        // 已经过期的会话通过SessionTracker进行管理
         zkDb.getSessions().stream()
                         .filter(session -> zkDb.getSessionWithTimeOuts().get(session) == null)
                         .forEach(session -> killSession(session, zkDb.getDataTreeLastProcessedZxid()));
@@ -648,7 +649,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             "Expiring session 0x{}, timeout of {}ms exceeded",
             Long.toHexString(sessionId),
             session.getTimeout());
-        close(sessionId);
+        close(sessionId); // 关闭会话
     }
 
     public void expire(long sessionId) {

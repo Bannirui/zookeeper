@@ -184,9 +184,11 @@ public class ZooKeeperServerMain {
                  */
                 cnxnFactory.configure(config.getClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), false);
                 /**
-                 * -netty服务端编程 启动主线程
-                 * -恢复本地数据
-                 * -启动会话管理器\注册请求处理链
+                 * -netty服务端编程 启动netty服务端 开始监听Socket 等待客户端请求
+                 * - zk实例启动
+                 *   - 恢复本地数据
+                 *   - 启动会话管理器
+                 *   - 注册请求处理链
                  */
                 cnxnFactory.startup(zkServer);
                 // zkServer has been started. So we don't need to start it again in secureCnxnFactory.

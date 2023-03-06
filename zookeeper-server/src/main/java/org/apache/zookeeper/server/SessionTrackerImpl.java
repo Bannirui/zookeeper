@@ -105,11 +105,11 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
         return nextSid;
     }
 
-    private final SessionExpirer expirer;
+    private final SessionExpirer expirer; // 过期会话管理器
 
     public SessionTrackerImpl(SessionExpirer expirer, ConcurrentMap<Long, Integer> sessionsWithTimeout, int tickTime, long serverId, ZooKeeperServerListener listener) {
         super("SessionTracker", listener);
-        this.expirer = expirer;
+        this.expirer = expirer; // ZooKeeperServer是SessionExpirer的派生类 zk实例本身就是会话过期管理器的实现
         this.sessionExpiryQueue = new ExpiryQueue<SessionImpl>(tickTime);
         this.sessionsWithTimeout = sessionsWithTimeout;
         this.nextSessionId.set(initializeNextSessionId(serverId));
@@ -167,7 +167,7 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
                 for (SessionImpl s : sessionExpiryQueue.poll()) {
                     ServerMetrics.getMetrics().STALE_SESSIONS_EXPIRED.add(1);
                     setSessionClosing(s.sessionId);
-                    expirer.expire(s);
+                    expirer.expire(s); // 过期管理器负责处理过期的会话 expirer指向的就是ZooKeeperServer实现
                 }
             }
         } catch (InterruptedException e) {
