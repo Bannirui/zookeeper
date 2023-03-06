@@ -232,6 +232,11 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     // this data structure must be accessed under the outstandingChanges lock
     final Map<String, ChangeRecord> outstandingChangesForPath = new HashMap<String, ChangeRecord>();
 
+    /**
+     * Socket通信的实现
+     *   - NioServerCnxnFactory
+     *   - NettyServerCnxnFactory
+     */
     protected ServerCnxnFactory serverCnxnFactory;
     protected ServerCnxnFactory secureServerCnxnFactory;
 

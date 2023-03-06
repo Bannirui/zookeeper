@@ -498,7 +498,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
 
     }
 
-    CnxnChannelHandler channelHandler = new CnxnChannelHandler();
+    CnxnChannelHandler channelHandler = new CnxnChannelHandler(); // 服务端-客户端数据读写
     ReadIssuedTrackingHandler readIssuedTrackingHandler = new ReadIssuedTrackingHandler();
 
     private ServerBootstrap configureBootstrapAllocator(ServerBootstrap bootstrap) {
@@ -532,6 +532,9 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
 
         setOutstandingHandshakeLimit(Integer.getInteger(OUTSTANDING_HANDSHAKE_LIMIT, -1));
 
+        /**
+         * 标准的Netty服务端编程
+         */
         EventLoopGroup bossGroup = NettyUtils.newNioOrEpollEventLoopGroup(NettyUtils.getClientReachableLocalInetAddressCount());
         EventLoopGroup workerGroup = NettyUtils.newNioOrEpollEventLoopGroup();
         ServerBootstrap bootstrap = new ServerBootstrap().group(bossGroup, workerGroup)
@@ -553,7 +556,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
                                                                  } else if (shouldUsePortUnification) {
                                                                      initSSL(pipeline, true);
                                                                  }
-                                                                 pipeline.addLast("servercnxnfactory", channelHandler);
+                                                                 pipeline.addLast("servercnxnfactory", channelHandler); // 关注这个Handler即可
                                                              }
                                                          });
         this.bootstrap = configureBootstrapAllocator(bootstrap);
