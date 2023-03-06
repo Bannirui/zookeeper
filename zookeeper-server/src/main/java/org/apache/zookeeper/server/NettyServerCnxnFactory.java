@@ -739,7 +739,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
 
     @Override
     public void startup(ZooKeeperServer zks, boolean startServer) throws IOException, InterruptedException {
-        // 启动netty
+        // 启动netty 监听2181端口 等待客户端请求
         start();
         setZooKeeperServer(zks);
         if (startServer) {

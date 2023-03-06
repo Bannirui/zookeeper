@@ -78,7 +78,7 @@ public class JettyAdminServer implements AdminServer {
     private final int port;
     private final int idleTimeout;
     private final String commandUrl;
-    private ZooKeeperServer zkServer;
+    private ZooKeeperServer zkServer; // zk服务实例
 
     public JettyAdminServer() throws AdminServerException, IOException, GeneralSecurityException {
         this(
@@ -92,13 +92,13 @@ public class JettyAdminServer implements AdminServer {
     }
 
     public JettyAdminServer(
-        String address,
-        int port,
-        int timeout,
-        String commandUrl,
-        int httpVersion,
+        String address, // 0.0.0.0
+        int port, // 8080
+        int timeout, // 30_000
+        String commandUrl, // /commands
+        int httpVersion, // 11
         boolean portUnification,
-        boolean forceHttps) throws IOException, GeneralSecurityException {
+        boolean forceHttps) throws IOException, GeneralSecurityException { // jetty初始化
 
         this.port = port;
         this.idleTimeout = timeout;
@@ -173,7 +173,7 @@ public class JettyAdminServer implements AdminServer {
         constrainTraceMethod(context);
         server.setHandler(context);
 
-        context.addServlet(new ServletHolder(new CommandServlet()), commandUrl + "/*");
+        context.addServlet(new ServletHolder(new CommandServlet()), commandUrl + "/*"); // 业务Servlet
     }
 
     /**
@@ -252,13 +252,17 @@ public class JettyAdminServer implements AdminServer {
             cmd = cmd.substring(1);
 
             // Extract keyword arguments to command from request parameters
-            @SuppressWarnings("unchecked") Map<String, String[]> parameterMap = request.getParameterMap();
+            @SuppressWarnings("unchecked") Map<String, String[]> parameterMap = request.getParameterMap(); // 请求的参数
             Map<String, String> kwargs = new HashMap<String, String>();
             for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
                 kwargs.put(entry.getKey(), entry.getValue()[0]);
             }
 
             // Run the command
+            /**
+             * 策略模式
+             * cmd指令映射到请求处理器
+             */
             CommandResponse cmdResponse = Commands.runCommand(cmd, zkServer, kwargs);
 
             // Format and print the output of the command

@@ -89,7 +89,7 @@ public class ZKDatabase {
 
     public static final String COMMIT_LOG_COUNT = "zookeeper.commitLogCount";
     public static final int DEFAULT_COMMIT_LOG_COUNT = 500;
-    public int commitLogCount;
+    public int commitLogCount; // 维护事务的队列大小
     protected Queue<Proposal> committedLog = new ArrayDeque<>();
     protected ReentrantReadWriteLock logLock = new ReentrantReadWriteLock();
     private volatile boolean initialized = false;
@@ -111,6 +111,10 @@ public class ZKDatabase {
         this.snapLog = snapLog;
 
         try {
+            /**
+             * 可以通过VM参数指定
+             * 默认大小0.33
+             */
             snapshotSizeFactor = Double.parseDouble(
                     System.getProperty(SNAPSHOT_SIZE_FACTOR,
                             Double.toString(DEFAULT_SNAPSHOT_SIZE_FACTOR)));
@@ -132,6 +136,11 @@ public class ZKDatabase {
         LOG.info("{} = {}", SNAPSHOT_SIZE_FACTOR, snapshotSizeFactor);
 
         try {
+            /**
+             * 可以通过VM参数指定事务队列大小
+             * 默认500
+             * 当要更新的事务大小已经超过了500 会移除队列中最早的事务
+             */
             commitLogCount = Integer.parseInt(
                     System.getProperty(COMMIT_LOG_COUNT,
                             Integer.toString(DEFAULT_COMMIT_LOG_COUNT)));
@@ -282,6 +291,9 @@ public class ZKDatabase {
      */
     public long loadDataBase() throws IOException {
         long startTime = Time.currentElapsedTime();
+        /**
+         * dataTree就是内存中的内容 要对它打快照
+         */
         long zxid = snapLog.restore(dataTree, sessionsWithTimeouts, commitProposalPlaybackListener);
         initialized = true;
         long loadTime = Time.currentElapsedTime() - startTime;

@@ -157,8 +157,14 @@ public class ZooKeeperServerMain {
             zkServer.registerServerShutdownHandler(new ZooKeeperServerShutdownHandler(shutdownLatch));
 
             // Start Admin server
+            /**
+             * 单机启动下提供admin服务 JettyAdminServer实例
+             * jetty服务监听在ip:8080/commands/下
+             */
             adminServer = AdminServerFactory.createAdminServer();
+            // 设置zk服务实例
             adminServer.setZooKeeperServer(zkServer);
+            // 服务启动 监听客户端请求
             adminServer.start();
 
             boolean needStartZKServer = true;

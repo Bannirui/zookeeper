@@ -58,7 +58,7 @@ public class FileTxnSnapLog {
     //the snapshot directory
     final File snapDir; // 内存快照
     TxnLog txnLog;
-    SnapShot snapLog;
+    SnapShot snapLog; // 内存快照
     private final boolean autoCreateDB;
     private final boolean trustEmptySnapshot;
     public static final int VERSION = 2;
@@ -251,6 +251,9 @@ public class FileTxnSnapLog {
      */
     public long restore(DataTree dt, Map<Long, Integer> sessions, PlayBackListener listener) throws IOException {
         long snapLoadingStartTime = Time.currentElapsedTime();
+        /**
+         * 把快照反序列化出来 加载放到内存的DataTree中
+         */
         long deserializeResult = snapLog.deserialize(dt, sessions);
         ServerMetrics.getMetrics().STARTUP_SNAP_LOAD_TIME.add(Time.currentElapsedTime() - snapLoadingStartTime);
         FileTxnLog txnLog = new FileTxnLog(dataDir);

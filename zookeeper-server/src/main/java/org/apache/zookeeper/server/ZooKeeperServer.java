@@ -192,8 +192,14 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     private ZKDatabase zkDb;
     private ResponseCache readResponseCache;
     private ResponseCache getChildrenResponseCache;
-    private final AtomicLong hzxid = new AtomicLong(0);
+    private final AtomicLong hzxid = new AtomicLong(0); // 维护着zk实例最大的zxid
     public static final Exception ok = new Exception("No prob");
+
+    /**
+     * zk请求责任链
+     * PreRP->SyncRP->FinalRP
+     * firstProcessor指向但链表头节点
+     */
     protected RequestProcessor firstProcessor;
     protected JvmPauseMonitor jvmPauseMonitor;
     protected volatile State state = State.INITIAL;
@@ -523,6 +529,9 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         if (zkDb.isInitialized()) {
             setZxid(zkDb.getDataTreeLastProcessedZxid());
         } else {
+            /**
+             * zk实例上最大的zxid
+             */
             setZxid(zkDb.loadDataBase());
         }
 
@@ -716,9 +725,15 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     private void startupWithServerState(State state) {
         if (sessionTracker == null) {
+            // session追踪器 本质是个线程
             createSessionTracker();
         }
+        // 启动session追踪器 就是启动一个线程
         startSessionTracker();
+        /**
+         * zk请求责任链
+         * PreRP->SyncRP->FinalRP
+         */
         setupRequestProcessors();
 
         startRequestThrottler();
@@ -750,11 +765,38 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     }
 
+    /**
+     * zk请求责任链
+     * PreRP->SyncRP->FinalRP
+     */
     protected void setupRequestProcessors() {
+        /**
+         * FinalRequestProcessor
+         *   - 内存更改
+         *   - 处理事件响应
+         *   - 返回客户端响应
+         */
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
+        /**
+         * SyncRequestProcessor
+         *   - 事务对象持久化 生成事务文件
+         *   - 打快照
+         *   - 将请求转交给FinalRP
+         */
         RequestProcessor syncProcessor = new SyncRequestProcessor(this, finalProcessor);
         ((SyncRequestProcessor) syncProcessor).start();
+        /**
+         * PreRequestProcessor请求处理器
+         *   - 做认证 生成txn事务对象
+         *   - 请求转交给SyncRP
+         */
         firstProcessor = new PrepRequestProcessor(this, syncProcessor);
+        /**
+         * 责任链设计模式
+         * 每个请求处理器都是一个单链表的节点 将3个处理器串起来就是一条链表
+         * 请求从链表头依次被处理
+         * PreRP->SyncRP->FinalRP
+         */
         ((PrepRequestProcessor) firstProcessor).start();
     }
 
@@ -773,6 +815,10 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     }
 
     protected void createSessionTracker() {
+        /**
+         * session追踪器
+         * 本质是个线程
+         */
         sessionTracker = new SessionTrackerImpl(this, zkDb.getSessionWithTimeOuts(), tickTime, createSessionTrackerServerId, getZooKeeperServerListener());
     }
 
