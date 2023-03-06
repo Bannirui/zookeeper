@@ -198,7 +198,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     /**
      * zk请求责任链
      * PreRP->SyncRP->FinalRP
-     * firstProcessor指向但链表头节点
+     * firstProcessor指向单链表头节点
      */
     protected RequestProcessor firstProcessor;
     protected JvmPauseMonitor jvmPauseMonitor;
@@ -798,7 +798,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
          * 请求从链表头依次被处理
          * PreRP->SyncRP->FinalRP
          */
-        ((PrepRequestProcessor) firstProcessor).start();
+        ((PrepRequestProcessor) firstProcessor).start(); // RequestProcessor是Thread的派生类
     }
 
     public ZooKeeperServerListener getZooKeeperServerListener() {
