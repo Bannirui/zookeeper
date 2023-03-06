@@ -748,7 +748,11 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
         if (startServer) { // 启动zk实例
             // 恢复本地数据
             zks.startdata();
-            // 启动会话管理器\注册请求处理链
+            /**
+             * - 启动会话管理器
+             * - 注册请求处理链
+             * - 启动请求节流器
+             */
             zks.startup();
         }
     }

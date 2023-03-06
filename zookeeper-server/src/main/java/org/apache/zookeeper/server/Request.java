@@ -41,6 +41,7 @@ import org.apache.zookeeper.txn.TxnHeader;
  */
 public class Request {
 
+    // 这个请求标识关闭
     public static final Request requestOfDeath = new Request(null, 0, 0, 0, null, null);
 
     // Considers a request stale if the request's connection has closed. Enabled

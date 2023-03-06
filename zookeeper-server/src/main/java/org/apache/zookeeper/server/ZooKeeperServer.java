@@ -742,8 +742,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
          */
         setupRequestProcessors();
 
+        /**
+         * 请求节流器
+         */
         startRequestThrottler();
 
+        // JMX注册
         registerJMX();
 
         startJvmPauseMonitor();
