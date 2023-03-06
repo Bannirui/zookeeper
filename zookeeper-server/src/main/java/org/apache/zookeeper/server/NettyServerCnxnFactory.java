@@ -702,7 +702,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
     @Override
     public void start() {
         if (listenBacklog != -1) {
-            bootstrap.option(ChannelOption.SO_BACKLOG, listenBacklog);
+            bootstrap.option(ChannelOption.SO_BACKLOG, listenBacklog); // socket监听队列大小
         }
         LOG.info("binding to port {}", localAddress);
         parentChannel = bootstrap.bind(localAddress).syncUninterruptibly().channel(); // netty服务端编程
@@ -742,7 +742,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
         // 启动netty 监听2181端口 等待客户端请求
         start();
         setZooKeeperServer(zks);
-        if (startServer) {
+        if (startServer) { // 启动zk实例
             // 恢复本地数据
             zks.startdata();
             // 启动会话管理器\注册请求处理链

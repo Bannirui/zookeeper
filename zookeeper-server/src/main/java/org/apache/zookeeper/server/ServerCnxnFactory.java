@@ -163,11 +163,13 @@ public abstract class ServerCnxnFactory {
     public abstract void closeAll(ServerCnxn.DisconnectReason reason);
 
     public static ServerCnxnFactory createFactory() throws IOException {
+        // 通过VM参数指定网络通信的实现-Dzookeeper.serverCnxnFactory
         String serverCnxnFactoryName = System.getProperty(ZOOKEEPER_SERVER_CNXN_FACTORY);
         if (serverCnxnFactoryName == null) {
-            serverCnxnFactoryName = NIOServerCnxnFactory.class.getName();
+            serverCnxnFactoryName = NIOServerCnxnFactory.class.getName(); // 默认的实现是zk自己提供的NioServerCnxnFactory
         }
         try {
+            // 反射创建实例
             ServerCnxnFactory serverCnxnFactory = (ServerCnxnFactory) Class.forName(serverCnxnFactoryName)
                                                                            .getDeclaredConstructor()
                                                                            .newInstance();
