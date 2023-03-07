@@ -624,7 +624,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     private void close(long sessionId) {
         Request si = new Request(null, sessionId, 0, OpCode.closeSession, null, null);
-        submitRequest(si);
+        submitRequest(si); // 关联连接也是通过消息驱动
     }
 
     public void closeSession(long sessionId) {

@@ -34,15 +34,32 @@ import org.apache.zookeeper.common.Time;
  */
 public class ExpiryQueue<E> {
 
+    /**
+     * key->会话对象
+     * value->归一化后的超时时间
+     */
     private final ConcurrentHashMap<E, Long> elemMap = new ConcurrentHashMap<E, Long>();
     /**
      * The maximum number of buckets is equal to max timeout/expirationInterval,
      * so the expirationInterval should not be too small compared to the
      * max timeout that this expiry queue needs to maintain.
+     *
+     * 以超时时间为key的缓存
+     * key->归一化超时时间
+     * value->在该时间过期的会话集合
      */
     private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>();
 
-    private final AtomicLong nextExpirationTime = new AtomicLong();
+    private final AtomicLong nextExpirationTime = new AtomicLong(); // 迭代维护下一个过期时间 这样就可以拿着过期时间直接去hash表去这个过期时间映射的连接
+
+    /**
+     * 相当于是基数
+     * 假定expirationInterval = 10000，
+     * connection_1_timeout_point = 1599715479084
+     * connection_2_timeout_point =  1599715479184
+     * connection_3_timeout_point =  1599715479384
+     * 那么通过归一化计算他们三个的超时时间点都变成了1599715480000
+     */
     private final int expirationInterval;
 
     public ExpiryQueue(int expirationInterval) {
@@ -81,18 +98,18 @@ public class ExpiryQueue<E> {
      * @return time at which the element is now set to expire if
      *                 changed, or null if unchanged
      */
-    public Long update(E elem, int timeout) {
-        Long prevExpiryTime = elemMap.get(elem);
+    public Long update(E elem, int timeout) { // timeout是连接还有多久过期
+        Long prevExpiryTime = elemMap.get(elem); // 当前连接维护的当前的过期时间
         long now = Time.currentElapsedTime();
-        Long newExpiryTime = roundToNextInterval(now + timeout);
+        Long newExpiryTime = roundToNextInterval(now + timeout); // 归一化出来的新的过期时间
 
-        if (newExpiryTime.equals(prevExpiryTime)) {
+        if (newExpiryTime.equals(prevExpiryTime)) { // 不用更新过期时间
             // No change, so nothing to update
             return null;
         }
 
         // First add the elem to the new expiry time bucket in expiryMap.
-        Set<E> set = expiryMap.get(newExpiryTime);
+        Set<E> set = expiryMap.get(newExpiryTime); // 集合里面都是这个时间过期
         if (set == null) {
             // Construct a ConcurrentHashSet using a ConcurrentHashMap
             set = Collections.newSetFromMap(new ConcurrentHashMap<E, Boolean>());
@@ -122,7 +139,7 @@ public class ExpiryQueue<E> {
      */
     public long getWaitTime() {
         long now = Time.currentElapsedTime();
-        long expirationTime = nextExpirationTime.get();
+        long expirationTime = nextExpirationTime.get(); // 下一个过期时间
         return now < expirationTime ? (expirationTime - now) : 0L;
     }
 
@@ -142,7 +159,7 @@ public class ExpiryQueue<E> {
         }
 
         Set<E> set = null;
-        long newExpirationTime = expirationTime + expirationInterval;
+        long newExpirationTime = expirationTime + expirationInterval; // expirationInterval归一化的设计确保了所有过期时间都是这个基数的整数倍 因此每次更新过期时间都以这个基准为步进值
         if (nextExpirationTime.compareAndSet(expirationTime, newExpirationTime)) {
             set = expiryMap.remove(expirationTime);
         }

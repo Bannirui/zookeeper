@@ -110,7 +110,7 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
     public SessionTrackerImpl(SessionExpirer expirer, ConcurrentMap<Long, Integer> sessionsWithTimeout, int tickTime, long serverId, ZooKeeperServerListener listener) {
         super("SessionTracker", listener);
         this.expirer = expirer; // ZooKeeperServer是SessionExpirer的派生类 zk实例本身就是会话过期管理器的实现
-        this.sessionExpiryQueue = new ExpiryQueue<SessionImpl>(tickTime);
+        this.sessionExpiryQueue = new ExpiryQueue<SessionImpl>(tickTime); // tickTime过期时间归一化的基准
         this.sessionsWithTimeout = sessionsWithTimeout;
         this.nextSessionId.set(initializeNextSessionId(serverId));
         for (Entry<Long, Integer> e : sessionsWithTimeout.entrySet()) {
@@ -158,13 +158,19 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
     public void run() {
         try {
             while (running) {
-                long waitTime = sessionExpiryQueue.getWaitTime();
+                /**
+                 * ExpiryQueue中expirationInterval设计的好处之一
+                 *   - 保证了过期时间相对集中 不会绝对离散 那么这边可能要等待的时间waitTime就不会密集且多 一定程度上让出了cpu执行权
+                 * 考虑个场景
+                 *   - 过期时间没有归一 所有连接间隔1ms依次过期 那么这边一直处于轮询中 cpu打满
+                 */
+                long waitTime = sessionExpiryQueue.getWaitTime(); // 还有多久就到了队列中维护的过期时间了
                 if (waitTime > 0) {
                     Thread.sleep(waitTime);
                     continue;
                 }
 
-                for (SessionImpl s : sessionExpiryQueue.poll()) {
+                for (SessionImpl s : sessionExpiryQueue.poll()) { // 出队的这一拨连接全部过期
                     ServerMetrics.getMetrics().STALE_SESSIONS_EXPIRED.add(1);
                     setSessionClosing(s.sessionId);
                     expirer.expire(s); // 过期管理器负责处理过期的会话 expirer指向的就是ZooKeeperServer实现
@@ -282,15 +288,6 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
         } else {
             added = true;
             LOG.debug("Adding session 0x{}", Long.toHexString(id));
-        }
-
-        if (LOG.isTraceEnabled()) {
-            String actionStr = added ? "Adding" : "Existing";
-            ZooTrace.logTraceMessage(
-                LOG,
-                ZooTrace.SESSION_TRACE_MASK,
-                "SessionTrackerImpl --- " + actionStr
-                + " session 0x" + Long.toHexString(id) + " " + sessionTimeout);
         }
 
         updateSessionExpiry(session, sessionTimeout);
