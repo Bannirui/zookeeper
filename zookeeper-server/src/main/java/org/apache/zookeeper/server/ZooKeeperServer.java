@@ -1217,7 +1217,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     }
 
     public void submitRequestNow(Request si) {
-        if (firstProcessor == null) {
+        if (firstProcessor == null) { // 职责链
             synchronized (this) {
                 try {
                     // Since all requests are passed to the request

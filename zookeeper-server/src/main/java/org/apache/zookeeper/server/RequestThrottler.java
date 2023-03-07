@@ -63,7 +63,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
 
     private final LinkedBlockingQueue<Request> submittedRequests = new LinkedBlockingQueue<Request>();
 
-    private final ZooKeeperServer zks;
+    private final ZooKeeperServer zks; // 当前仅仅是个节流器 至于超出节流限制规则该怎么操作还需要ZK实例来进行 因此要维护一个ZK的引用
     private volatile boolean stopping;
     private volatile boolean killed;
 
@@ -144,16 +144,23 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                     break;
                 }
 
-                Request request = submittedRequests.take();
+                Request request = submittedRequests.take(); // 处理请求队列中的业务请求
                 if (Request.requestOfDeath == request) {
                     break;
                 }
 
-                if (request.mustDrop()) {
+                if (request.mustDrop()) { // 丢弃请求
                     continue;
                 }
 
                 // Throttling is disabled when maxRequests = 0
+                /**
+                 * 节流机制的体现
+                 *   - 要么丢掉请求，不处理该请求了
+                 *   - 要么等待服务端入口流量下来了，再提交该请求
+                 * submitRequestNow这个方法是将请求转发给ZK实例，让其执行
+                 * 也就是在submitRequestNow这个方法之前多一层过滤机制
+                 */
                 if (maxRequests > 0) {
                     while (!killed) {
                         if (dropStaleRequests && request.isStale()) {
@@ -185,7 +192,7 @@ public class RequestThrottler extends ZooKeeperCriticalThread {
                       request.setIsThrottled(true);
                       ServerMetrics.getMetrics().THROTTLED_OPS.add(1);
                     }
-                    zks.submitRequestNow(request);
+                    zks.submitRequestNow(request); // 真正立马要执行的请求控制权给到ZK服务 让其执行
                 }
             }
         } catch (InterruptedException e) {
