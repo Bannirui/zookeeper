@@ -622,8 +622,8 @@ public class FileTxnSnapLog {
      * roll the transaction logs
      * @throws IOException
      */
-    public void rollLog() throws IOException {
-        txnLog.rollLog();
+    public void rollLog() throws IOException { // 滚动事务日志
+        txnLog.rollLog(); // 将内存buffer刷到fos中 write到文件系统 但是不保证刷盘
     }
 
     /**

@@ -103,7 +103,7 @@ public class DataTree {
      * This map provides a fast lookup to the datanodes. The tree is the
      * source of truth and is where all the locking occurs
      */
-    private final NodeHashMap nodes;
+    private final NodeHashMap nodes; // 节点
 
     private IWatchManager dataWatches;
 
@@ -151,6 +151,8 @@ public class DataTree {
 
     /**
      * This hashtable lists the paths of the ephemeral nodes of a session.
+     *
+     * 临时节点
      */
     private final Map<Long, HashSet<String>> ephemerals = new ConcurrentHashMap<Long, HashSet<String>>();
 

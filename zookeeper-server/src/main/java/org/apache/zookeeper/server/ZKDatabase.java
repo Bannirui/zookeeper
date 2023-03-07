@@ -74,6 +74,8 @@ public class ZKDatabase {
     /**
      * make sure on a clear you take care of
      * all these members.
+     *
+     * 内存中节点存放对象
      */
     protected DataTree dataTree;
     protected ConcurrentHashMap<Long, Integer> sessionsWithTimeouts;
@@ -491,7 +493,7 @@ public class ZKDatabase {
      * datatree/zkdatabase
      */
     public ProcessTxnResult processTxn(TxnHeader hdr, Record txn, TxnDigest digest) {
-        return dataTree.processTxn(hdr, txn, digest);
+        return dataTree.processTxn(hdr, txn, digest); // ZK服务实例中FinalRequestProcessor对内存修改调用到这
     }
 
     /**
@@ -647,7 +649,7 @@ public class ZKDatabase {
      * @param si the request to append
      * @return true if the append was succesfull and false if not
      */
-    public boolean append(Request si) throws IOException {
+    public boolean append(Request si) throws IOException { // 将事务头和事务数据写入应用内存buffer
         if (this.snapLog.append(si)) {
             txnCount.incrementAndGet();
             return true;
@@ -659,6 +661,10 @@ public class ZKDatabase {
      * roll the underlying log
      */
     public void rollLog() throws IOException {
+        /**
+         * 滚动事务日志
+         * 将内存buffer刷到fos中 write到文件系统 但是不保证刷盘
+         */
         this.snapLog.rollLog();
         resetTxnCount();
     }

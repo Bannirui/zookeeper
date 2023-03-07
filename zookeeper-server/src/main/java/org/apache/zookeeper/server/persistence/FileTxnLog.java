@@ -233,7 +233,7 @@ public class FileTxnLog implements TxnLog, Closeable {
      * rollover the current log file to a new one.
      * @throws IOException
      */
-    public synchronized void rollLog() throws IOException {
+    public synchronized void rollLog() throws IOException { // 将内存buffer刷到fos中 write到文件系统 但是不保证刷盘
         if (logStream != null) {
             this.logStream.flush();
             prevLogsRunningTotal += getCurrentLogSize();
@@ -284,25 +284,29 @@ public class FileTxnLog implements TxnLog, Closeable {
         if (logStream == null) {
             LOG.info("Creating new log file: {}", Util.makeLogName(hdr.getZxid()));
 
+            // 创建log文件 比如=/tmp/zookeeper/log/version-2/log.9
             logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
             fos = new FileOutputStream(logFileWrite);
             logStream = new BufferedOutputStream(fos);
             oa = BinaryOutputArchive.getArchive(logStream);
             FileHeader fhdr = new FileHeader(TXNLOG_MAGIC, VERSION, dbId);
-            fhdr.serialize(oa, "fileheader");
+            fhdr.serialize(oa, "fileheader"); // 魔数刷盘
             // Make sure that the magic number is written before padding.
             logStream.flush();
             filePadding.setCurrentSize(fos.getChannel().position());
             streamsToFlush.add(fos);
         }
         filePadding.padFile(fos.getChannel());
+        // 事务头和事务数据
         byte[] buf = Util.marshallTxnEntry(hdr, txn, digest);
         if (buf == null || buf.length == 0) {
             throw new IOException("Faulty serialization for header " + "and txn");
         }
+        // crc校验
         Checksum crc = makeChecksumAlgorithm();
         crc.update(buf, 0, buf.length);
         oa.writeLong(crc.getValue(), "txnEntryCRC");
+        // 写入内存buffer
         Util.writeTxnBytes(oa, buf);
 
         return true;

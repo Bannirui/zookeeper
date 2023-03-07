@@ -51,11 +51,13 @@ public class DataNode implements Record {
 
     /**
      * the acl map long for this datanode. the datatree has the map
+     * acl权限信息
      */
     Long acl;
 
     /**
      * the stat for this node that is persisted to disk.
+     * 节点stat信息
      */
     public StatPersisted stat;
 
@@ -63,6 +65,7 @@ public class DataNode implements Record {
      * the list of children for this node. note that the list of children string
      * does not contain the parent path -- just the last part of the path. This
      * should be synchronized on except deserializing (for speed up issues).
+     * 子节点集合
      */
     private Set<String> children = null;
 
