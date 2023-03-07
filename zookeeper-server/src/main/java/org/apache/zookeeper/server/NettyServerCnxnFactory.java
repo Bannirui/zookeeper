@@ -111,7 +111,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
     private final ServerBootstrap bootstrap;
     private Channel parentChannel;
     private final ChannelGroup allChannels = new DefaultChannelGroup("zkServerCnxns", new DefaultEventExecutor());
-    private final Map<InetAddress, AtomicInteger> ipMap = new ConcurrentHashMap<>();
+    private final Map<InetAddress, AtomicInteger> ipMap = new ConcurrentHashMap<>(); // 连接进服务端的客户端连接计数
     private InetSocketAddress localAddress;
     private int maxClientCnxns = 60; // 默认限制单台客户端到zk服务实例的连接数是60
     int listenBacklog = -1; // 默认不限制Socket listen队列
@@ -210,13 +210,13 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
             }
 
             final Channel channel = ctx.channel();
-            if (limitTotalNumberOfCnxns()) {
+            if (limitTotalNumberOfCnxns()) { // 连接数限制
                 ServerMetrics.getMetrics().CONNECTION_REJECTED.add(1);
                 channel.close();
                 return;
             }
             InetAddress addr = ((InetSocketAddress) channel.remoteAddress()).getAddress();
-            if (maxClientCnxns > 0 && getClientCnxnCount(addr) >= maxClientCnxns) {
+            if (maxClientCnxns > 0 && getClientCnxnCount(addr) >= maxClientCnxns) { // 同客户端连接限制
                 ServerMetrics.getMetrics().CONNECTION_REJECTED.add(1);
                 LOG.warn("Too many connections from {} - max is {}", addr, maxClientCnxns);
                 channel.close();
@@ -224,7 +224,7 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
             }
 
             NettyServerCnxn cnxn = new NettyServerCnxn(channel, zkServer, NettyServerCnxnFactory.this);
-            ctx.channel().attr(CONNECTION_ATTRIBUTE).set(cnxn);
+            ctx.channel().attr(CONNECTION_ATTRIBUTE).set(cnxn); // 服务端Channel跟zk实例绑定起来 数据的读写依赖Channel 将来读写的时候将权利转移给zk实例
 
             // Check the zkServer assigned to the cnxn is still running,
             // close it before starting the heavy TLS handshake
@@ -350,11 +350,12 @@ public class NettyServerCnxnFactory extends ServerCnxnFactory {
                 }
                 try {
                     LOG.debug("New message {} from {}", msg, ctx.channel());
+                    // 读数据 客户端连接服务端的时候就已经给每个Channel绑定上了一个NettyServerCnxn实例
                     NettyServerCnxn cnxn = ctx.channel().attr(CONNECTION_ATTRIBUTE).get();
                     if (cnxn == null) {
                         LOG.error("channelRead() on a closed or closing NettyServerCnxn");
                     } else {
-                        cnxn.processMessage((ByteBuf) msg);
+                        cnxn.processMessage((ByteBuf) msg); // 数据的拥有权就从Netty转移到了NettyServerCnxn组件上了
                     }
                 } catch (Exception ex) {
                     LOG.error("Unexpected exception in receive", ex);

@@ -1183,6 +1183,18 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     }
 
     public void enqueueRequest(Request si) {
+        /**
+         * 回忆一下zk初始化过程
+         *   - 先启动的Netty
+         *   - 再启动的zk
+         *     - 恢复本地数据
+         *     - 注册请求处理责任链
+         *     - 启动节流器
+         * 也就是说 zk中所有的请求必须要走请求责任链 但是netty启动时机早 可能过早接到了数据
+         * 所以要等待zk初始化完成
+         *
+         * 这里边的语义也就意味着 当节流器实例都已经创建好了 zk服务器肯定初始化完成了
+         */
         if (requestThrottler == null) {
             synchronized (this) {
                 try {
@@ -1201,7 +1213,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                 }
             }
         }
-        requestThrottler.submitRequest(si);
+        requestThrottler.submitRequest(si); // 请求交给节流器判定能否入队
     }
 
     public void submitRequestNow(Request si) {
@@ -1659,10 +1671,10 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     public void processPacket(ServerCnxn cnxn, ByteBuffer incomingBuffer) throws IOException {
         // We have the request, now process and setup for next
-        InputStream bais = new ByteBufferInputStream(incomingBuffer);
+        InputStream bais = new ByteBufferInputStream(incomingBuffer); // 接到的请求数据
         BinaryInputArchive bia = BinaryInputArchive.getArchive(bais);
         RequestHeader h = new RequestHeader();
-        h.deserialize(bia, "header");
+        h.deserialize(bia, "header"); // 反序列化请求头
 
         // Need to increase the outstanding request count first, otherwise
         // there might be a race condition that it enabled recv after
@@ -1679,7 +1691,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         // pointing
         // to the start of the txn
         incomingBuffer = incomingBuffer.slice();
-        if (h.getType() == OpCode.auth) {
+        if (h.getType() == OpCode.auth) { // 请求类型是授权
             LOG.info("got auth packet {}", cnxn.getRemoteSocketAddress());
             AuthPacket authPacket = new AuthPacket();
             ByteBufferInputStream.byteBuffer2Record(incomingBuffer, authPacket);
@@ -1723,12 +1735,19 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             return;
         } else if (h.getType() == OpCode.sasl) {
             processSasl(incomingBuffer, cnxn, h);
-        } else {
+        } else { // 其他类型的请求
             if (!authHelper.enforceAuthentication(cnxn, h.getXid())) {
                 // Authentication enforcement is failed
                 // Already sent response to user about failure and closed the session, lets return
                 return;
             } else {
+                /**
+                 * 创建Request对象 放进队列
+                 * 意味着三点
+                 *   - 客户端进来的请求数 对数据的控制权已经从Netty转移到了ZK上
+                 *   - 数据格式已经从字节封装成业务格式
+                 *   - 服务端不再直接面向请求个体 而是面向队列轮询
+                 */
                 Request si = new Request(cnxn, cnxn.getSessionId(), h.getXid(), h.getType(), incomingBuffer, cnxn.getAuthInfo());
                 int length = incomingBuffer.limit();
                 if (isLargeRequest(length)) {
@@ -1737,7 +1756,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                     si.setLargeRequestSize(length);
                 }
                 si.setOwner(ServerCnxn.me);
-                submitRequest(si);
+                submitRequest(si); // 请求入队
             }
         }
     }
