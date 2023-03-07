@@ -139,22 +139,15 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         try {
             while (true) {
                 ServerMetrics.getMetrics().PREP_PROCESSOR_QUEUE_SIZE.add(submittedRequests.size());
-                Request request = submittedRequests.take();
+                Request request = submittedRequests.take(); // 缓存取任务 该缓存实现是阻塞队列 take()方法可以永久性阻塞
                 ServerMetrics.getMetrics().PREP_PROCESSOR_QUEUE_TIME
                     .add(Time.currentElapsedTime() - request.prepQueueStartTime);
-                if (LOG.isTraceEnabled()) {
-                    long traceMask = ZooTrace.CLIENT_REQUEST_TRACE_MASK;
-                    if (request.type == OpCode.ping) {
-                        traceMask = ZooTrace.CLIENT_PING_TRACE_MASK;
-                    }
-                    ZooTrace.logRequest(LOG, traceMask, 'P', request, "");
-                }
                 if (Request.requestOfDeath == request) {
                     break;
                 }
 
                 request.prepStartTime = Time.currentElapsedTime();
-                pRequest(request);
+                pRequest(request); // PreRequestProcessor处理器关注的核心
             }
         } catch (Exception e) {
             handleException(this.getName(), e);
@@ -780,13 +773,13 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         request.setTxn(null);
 
         if (!request.isThrottled()) {
-          pRequestHelper(request);
+          pRequestHelper(request); // PreRequestProcessor定制处理逻辑
         }
 
         request.zxid = zks.getZxid();
         long timeFinishedPrepare = Time.currentElapsedTime();
         ServerMetrics.getMetrics().PREP_PROCESS_TIME.add(timeFinishedPrepare - request.prepStartTime);
-        nextProcessor.processRequest(request);
+        nextProcessor.processRequest(request); // PreRequestProcessor将请求交给SyncRequestProcessor
         ServerMetrics.getMetrics().PROPOSAL_PROCESS_TIME.add(Time.currentElapsedTime() - timeFinishedPrepare);
     }
 
@@ -1068,7 +1061,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
 
     public void processRequest(Request request) {
         request.prepQueueStartTime = Time.currentElapsedTime();
-        submittedRequests.add(request);
+        submittedRequests.add(request); // 将请求缓存起来 供线程轮询
         ServerMetrics.getMetrics().PREP_PROCESSOR_QUEUED.add(1);
     }
 

@@ -73,7 +73,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
 
     private final Semaphore snapThreadMutex = new Semaphore(1);
 
-    private final ZooKeeperServer zks;
+    private final ZooKeeperServer zks; // 持有ZK实例 需要委派ZK进行事务日志记录和快照记录
 
     private final RequestProcessor nextProcessor;
 
@@ -87,8 +87,13 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
 
     public SyncRequestProcessor(ZooKeeperServer zks, RequestProcessor nextProcessor) {
         super("SyncThread:" + zks.getServerId(), zks.getZooKeeperServerListener());
+        /**
+         * SyncRequestProcessor需要持有ZK实例的原因在于
+         *   - 需要委托ZK持有的ZKDatabase组件进行事务日志记录
+         *   - 需要委托ZK对内存数据打快照
+         */
         this.zks = zks;
-        this.nextProcessor = nextProcessor;
+        this.nextProcessor = nextProcessor; // 需要将请求继续下发给FinalRequestProcessor
         this.toFlush = new ArrayDeque<>(zks.getMaxBatchSize());
     }
 
@@ -152,6 +157,11 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         randSize = Math.abs(ThreadLocalRandom.current().nextLong() % (snapSizeInBytes / 2));
     }
 
+    /**
+     * 对请求的处理逻辑
+     *   - 记录对应的事务日志 委托给ZK实例 ZK实例再委托给ZKDatabase组件
+     *   - 内存数据打快照 委托为ZK实例 ZK实例再委托为FileTxnSnaplog组件
+     */
     @Override
     public void run() {
         try {
@@ -163,11 +173,11 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_SIZE.add(queuedRequests.size());
 
                 long pollTime = Math.min(zks.getMaxWriteQueuePollTime(), getRemainingDelay());
-                Request si = queuedRequests.poll(pollTime, TimeUnit.MILLISECONDS);
-                if (si == null) {
+                Request si = queuedRequests.poll(pollTime, TimeUnit.MILLISECONDS); // 提交在服务端的一个请求 已经经过了PreRequestProcessor处理 当前要处理的请求
+                if (si == null) { // 其实这个防御使NPE没必要 因为在processRequest()方法中入队前的先决条件就是非null
                     /* We timed out looking for more writes to batch, go ahead and flush immediately */
                     flush();
-                    si = queuedRequests.take();
+                    si = queuedRequests.take(); // 继续阻塞式从缓存中拿请求
                 }
 
                 if (si == REQUEST_OF_DEATH) {
@@ -178,8 +188,8 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_TIME.add(startProcessTime - si.syncQueueStartTime);
 
                 // track the number of records written to the log
-                if (!si.isThrottled() && zks.getZKDatabase().append(si)) {
-                    if (shouldSnapshot()) {
+                if (!si.isThrottled() && zks.getZKDatabase().append(si)) { // 写事务日志
+                    if (shouldSnapshot()) { // 内存数据打快照
                         resetSnapshotStats();
                         // roll the log
                         zks.getZKDatabase().rollLog();
@@ -190,7 +200,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                             new ZooKeeperThread("Snapshot Thread") {
                                 public void run() {
                                     try {
-                                        zks.takeSnapshot();
+                                        zks.takeSnapshot(); // 内存快照
                                     } catch (Exception e) {
                                         LOG.warn("Unexpected exception", e);
                                     } finally {
@@ -274,7 +284,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         Objects.requireNonNull(request, "Request cannot be null");
 
         request.syncQueueStartTime = Time.currentElapsedTime();
-        queuedRequests.add(request);
+        queuedRequests.add(request); // 缓存起来 给线程轮询
         ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUED.add(1);
     }
 

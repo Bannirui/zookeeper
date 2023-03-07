@@ -104,12 +104,15 @@ public class FinalRequestProcessor implements RequestProcessor {
     ZooKeeperServer zks;
 
     public FinalRequestProcessor(ZooKeeperServer zks) {
+        /**
+         * FinalRequest需要将请求作用于ZK内存数据上 因此要委托ZK实例进行内存更新
+         */
         this.zks = zks;
         this.requestPathMetricsCollector = zks.getRequestPathMetricsCollector();
     }
 
     private ProcessTxnResult applyRequest(Request request) {
-        ProcessTxnResult rc = zks.processTxn(request);
+        ProcessTxnResult rc = zks.processTxn(request); // 对内存进行更新
 
         // ZOOKEEPER-558:
         // In some cases the server does not close the connection (e.g., closeconn buffer
@@ -147,21 +150,14 @@ public class FinalRequestProcessor implements RequestProcessor {
     public void processRequest(Request request) {
         LOG.debug("Processing request:: {}", request);
 
-        if (LOG.isTraceEnabled()) {
-            long traceMask = ZooTrace.CLIENT_REQUEST_TRACE_MASK;
-            if (request.type == OpCode.ping) {
-                traceMask = ZooTrace.SERVER_PING_TRACE_MASK;
-            }
-            ZooTrace.logRequest(LOG, traceMask, 'E', request, "");
-        }
         ProcessTxnResult rc = null;
         if (!request.isThrottled()) {
-          rc = applyRequest(request);
+          rc = applyRequest(request); // 对内存数据进行更新
         }
         if (request.cnxn == null) {
             return;
         }
-        ServerCnxn cnxn = request.cnxn;
+        ServerCnxn cnxn = request.cnxn; // 请求中携带着NettyServerCnxn也就是连接管理器 每个连接管理器绑定着一个Channel 这样就知道该把响应发送给哪个客户端
 
         long lastZxid = zks.getZKDatabase().getDataTreeLastProcessedZxid();
 
@@ -211,6 +207,7 @@ public class FinalRequestProcessor implements RequestProcessor {
 
             AuditHelper.addAuditLog(request, rc);
 
+            // 将请求对应的响应返回给客户端
             switch (request.type) {
             case OpCode.ping: {
                 lastOp = "PING";
