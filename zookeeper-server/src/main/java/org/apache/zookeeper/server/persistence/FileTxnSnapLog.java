@@ -112,6 +112,10 @@ public class FileTxnSnapLog {
     public FileTxnSnapLog(File dataDir, File snapDir) throws IOException {
         LOG.debug("Opening datadir:{} snapDir:{}", dataDir, snapDir);
 
+        /**
+         * /tmp/zookeeper/data/version-2/snapshot.8
+         * /tmp/zookeeper/log/version-2/log.9
+         */
         this.dataDir = new File(dataDir, version + VERSION);
         this.snapDir = new File(snapDir, version + VERSION);
 
@@ -252,7 +256,11 @@ public class FileTxnSnapLog {
     public long restore(DataTree dt, Map<Long, Integer> sessions, PlayBackListener listener) throws IOException {
         long snapLoadingStartTime = Time.currentElapsedTime();
         /**
-         * 把快照反序列化出来 加载放到内存的DataTree中
+         * 把快照文件snapLog反序列化恢复到ZKDatabase中
+         *   - DataTree
+         *   - sessions
+         * 返回出来最新的zxid
+         * -1标识没有找到快照文件
          */
         long deserializeResult = snapLog.deserialize(dt, sessions);
         ServerMetrics.getMetrics().STARTUP_SNAP_LOAD_TIME.add(Time.currentElapsedTime() - snapLoadingStartTime);
@@ -283,7 +291,7 @@ public class FileTxnSnapLog {
             return highestZxid;
         };
 
-        if (-1L == deserializeResult) {
+        if (-1L == deserializeResult) { // 没有找到快照文件
             /* this means that we couldn't find any snapshot, so we need to
              * initialize an empty database (reported in ZOOKEEPER-2325) */
             if (txnLog.getLastLoggedZxid() != -1) {
@@ -477,10 +485,11 @@ public class FileTxnSnapLog {
         DataTree dataTree,
         ConcurrentHashMap<Long, Integer> sessionsWithTimeouts,
         boolean syncSnap) throws IOException {
-        long lastZxid = dataTree.lastProcessedZxid;
-        File snapshotFile = new File(snapDir, Util.makeSnapshotName(lastZxid));
+        long lastZxid = dataTree.lastProcessedZxid; // 内存数据中最大的zxid
+        File snapshotFile = new File(snapDir, Util.makeSnapshotName(lastZxid)); // /tmp/zookeeper/data/version-2/snapshot.8
         LOG.info("Snapshotting: 0x{} to {}", Long.toHexString(lastZxid), snapshotFile);
         try {
+            // 将内存数据dataTree和sessions序列化到snapshotFile中
             snapLog.serialize(dataTree, sessionsWithTimeouts, snapshotFile, syncSnap);
         } catch (IOException e) {
             if (snapshotFile.length() == 0) {

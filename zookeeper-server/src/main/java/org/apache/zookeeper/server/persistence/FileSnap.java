@@ -73,20 +73,21 @@ public class FileSnap implements SnapShot {
         // we run through 100 snapshots (not all of them)
         // if we cannot get it running within 100 snapshots
         // we should  give up
+        // 上限100个有效的快照文件 按照zxid降序
         List<File> snapList = findNValidSnapshots(100);
-        if (snapList.size() == 0) {
+        if (snapList.size() == 0) { // 没有快照文件 返回-1标识
             return -1L;
         }
         File snap = null;
         long snapZxid = -1;
         boolean foundValid = false;
-        for (int i = 0, snapListSize = snapList.size(); i < snapListSize; i++) {
+        for (int i = 0, snapListSize = snapList.size(); i < snapListSize; i++) { // 轮询找到的快照文件 反序列化出来zxid最大的有效文件内容
             snap = snapList.get(i);
             LOG.info("Reading snapshot {}", snap);
-            snapZxid = Util.getZxidFromName(snap.getName(), SNAPSHOT_FILE_PREFIX);
+            snapZxid = Util.getZxidFromName(snap.getName(), SNAPSHOT_FILE_PREFIX); // /tmp/zookeeper/data/version-2/snap.8
             try (CheckedInputStream snapIS = SnapStream.getInputStream(snap)) {
                 InputArchive ia = BinaryInputArchive.getArchive(snapIS);
-                deserialize(dt, sessions, ia);
+                deserialize(dt, sessions, ia); // 快照文件反序列到内存
                 SnapStream.checkSealIntegrity(snapIS, ia);
 
                 // Digest feature was added after the CRC to make it backward
@@ -239,16 +240,16 @@ public class FileSnap implements SnapShot {
      * @param snapShot the file to store snapshot into
      * @param fsync sync the file immediately after write
      */
-    public synchronized void serialize(
-        DataTree dt,
+    public synchronized void serialize( // 方法用synchronized修饰的同步方法 线程安全
+        DataTree dt, // 内存中要序列化的数据
         Map<Long, Integer> sessions,
-        File snapShot,
+        File snapShot, // 文件名
         boolean fsync) throws IOException {
         if (!close) {
-            try (CheckedOutputStream snapOS = SnapStream.getOutputStream(snapShot, fsync)) {
+            try (CheckedOutputStream snapOS = SnapStream.getOutputStream(snapShot, fsync)) { // 文件的输出流
                 OutputArchive oa = BinaryOutputArchive.getArchive(snapOS);
-                FileHeader header = new FileHeader(SNAP_MAGIC, VERSION, dbId);
-                serialize(dt, sessions, oa, header);
+                FileHeader header = new FileHeader(SNAP_MAGIC, VERSION, dbId); // 文件头
+                serialize(dt, sessions, oa, header); // 序列化
                 SnapStream.sealStream(snapOS, oa);
 
                 // Digest feature was added after the CRC to make it backward
