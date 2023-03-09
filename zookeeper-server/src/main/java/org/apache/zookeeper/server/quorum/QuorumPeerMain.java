@@ -150,6 +150,7 @@ public class QuorumPeerMain {
 
     public void runFromConfig(QuorumPeerConfig config) throws IOException, AdminServerException {
         try {
+            // JMX注册
             ManagedUtil.registerLog4jMBeans();
         } catch (JMException e) {
             LOG.warn("Unable to register log4j JMX control", e);
@@ -181,12 +182,20 @@ public class QuorumPeerMain {
             }
 
             quorumPeer = getQuorumPeer();
+            /**
+             * 文件管理器
+             * 使用场景
+             *   - 恢复本地数据要读取快照文件
+             *   - 恢复完本地数据要验证currentEpoch
+             *   - 恢复完本地数据要验证acceptedEpoch
+             *   - 集群启动后处理请求
+             */
             quorumPeer.setTxnFactory(new FileTxnSnapLog(config.getDataLogDir(), config.getDataDir()));
             quorumPeer.enableLocalSessions(config.areLocalSessionsEnabled());
             quorumPeer.enableLocalSessionsUpgrading(config.isLocalSessionsUpgradingEnabled());
             //quorumPeer.setQuorumPeers(config.getAllMembers());
-            quorumPeer.setElectionType(config.getElectionAlg());
-            quorumPeer.setMyid(config.getServerId());
+            quorumPeer.setElectionType(config.getElectionAlg()); // 投票算法标识只能是3JK
+            quorumPeer.setMyid(config.getServerId()); // sid
             quorumPeer.setTickTime(config.getTickTime());
             quorumPeer.setMinSessionTimeout(config.getMinSessionTimeout());
             quorumPeer.setMaxSessionTimeout(config.getMaxSessionTimeout());
@@ -196,12 +205,39 @@ public class QuorumPeerMain {
             quorumPeer.setObserverMasterPort(config.getObserverMasterPort());
             quorumPeer.setConfigFileName(config.getConfigFilename());
             quorumPeer.setClientPortListenBacklog(config.getClientPortListenBacklog());
+            /**
+             * 内存数据库组件
+             * 使用场景
+             *   - 恢复本地数据
+             *   - 集群启动处理请求
+             */
             quorumPeer.setZKDatabase(new ZKDatabase(quorumPeer.getTxnFactory()));
+            /**
+             * 集群信息
+             *   - 所有集群成员
+             *     - hash表存储
+             *     - key=sid
+             *     - value=ip:心跳端口:数据端口
+             *   - 参与投票成员
+             *     - hash表存储
+             *     - key=sid
+             *     - value=ip:心跳端口:数据端口
+             *   - 观察者成员 配置文件中没有显式指定 hash表就是空的
+             *     - hash表存储
+             *     - key=sid
+             *     - value=ip:心跳端口:数据端口
+             */
             quorumPeer.setQuorumVerifier(config.getQuorumVerifier(), false);
             if (config.getLastSeenQuorumVerifier() != null) {
                 quorumPeer.setLastSeenQuorumVerifier(config.getLastSeenQuorumVerifier(), false);
             }
             quorumPeer.initConfigInZKDatabase();
+            /**
+             * 网络通信工厂
+             * 负责提供底层网络通信实现的实例
+             *   - NioServerCnxn
+             *   - NettyServerCnxn
+             */
             quorumPeer.setCnxnFactory(cnxnFactory);
             quorumPeer.setSecureCnxnFactory(secureCnxnFactory);
             quorumPeer.setSslQuorum(config.isSslQuorum());
@@ -232,6 +268,9 @@ public class QuorumPeerMain {
                 quorumPeer.setJvmPauseMonitor(new JvmPauseMonitor(config));
             }
 
+            /**
+             * 启动集群节点
+             */
             quorumPeer.start();
             ZKAuditProvider.addZKStartStopAuditLog();
             quorumPeer.join();

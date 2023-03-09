@@ -42,7 +42,7 @@ public class QuorumMaj implements QuorumVerifier {
     private Map<Long, QuorumServer> votingMembers = new HashMap<Long, QuorumServer>();
     private Map<Long, QuorumServer> observingMembers = new HashMap<Long, QuorumServer>();
     private long version = 0;
-    protected int half;
+    protected int half; // 集群过半阈值
 
     public int hashCode() {
         assert false : "hashCode not designed";
@@ -90,12 +90,12 @@ public class QuorumMaj implements QuorumVerifier {
             String key = entry.getKey().toString();
             String value = entry.getValue().toString();
 
-            if (key.startsWith("server.")) {
+            if (key.startsWith("server.")) { // server.0=127.0.0.1:2008:6008
                 int dot = key.indexOf('.');
-                long sid = Long.parseLong(key.substring(dot + 1));
-                QuorumServer qs = new QuorumServer(sid, value);
+                long sid = Long.parseLong(key.substring(dot + 1)); // server id
+                QuorumServer qs = new QuorumServer(sid, value); // value=127.0.0.1:2006:6006
                 allMembers.put(Long.valueOf(sid), qs);
-                if (qs.type == LearnerType.PARTICIPANT) {
+                if (qs.type == LearnerType.PARTICIPANT) { // 没有在配置文件中指定服务器是Observer角色就进这个分支
                     votingMembers.put(Long.valueOf(sid), qs);
                 } else {
                     observingMembers.put(Long.valueOf(sid), qs);

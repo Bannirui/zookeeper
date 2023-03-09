@@ -96,7 +96,7 @@ public class QuorumPeerConfig {
     protected int initLimit;
     protected int syncLimit;
     protected int connectToLearnerMasterLimit;
-    protected int electionAlg = 3;
+    protected int electionAlg = 3; // 投票算法标识 默认值是3 配置文件中也不能配置其他值 如果在配置文件中配置了其他值在解析环节就会抛出异常
     protected int electionPort = 2182;
     protected boolean quorumListenOnAllIPs = false;
 
@@ -386,6 +386,8 @@ public class QuorumPeerConfig {
             } else if (key.equals("oraclePath")) {
                 oraclePath = value;
             } else {
+                // 集群配置
+                // zookeeper.server.1=127.0.0.1:2007:6007
                 System.setProperty("zookeeper." + key, value);
             }
         }
@@ -483,7 +485,7 @@ public class QuorumPeerConfig {
 
         // backward compatibility - dynamic configuration in the same file as
         // static configuration params see writeDynamicConfig()
-        if (dynamicConfigFileStr == null) {
+        if (dynamicConfigFileStr == null) { // 集群模式
             setupQuorumPeerConfig(zkProp, true);
             if (isDistributed() && isReconfigEnabled()) {
                 // we don't backup static config for standalone mode.

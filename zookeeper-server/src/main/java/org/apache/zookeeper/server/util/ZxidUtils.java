@@ -21,7 +21,7 @@ package org.apache.zookeeper.server.util;
 public class ZxidUtils {
 
     public static long getEpochFromZxid(long zxid) {
-        return zxid >> 32L;
+        return zxid >> 32L; // zk事务编号zxid高32位是任期号Epoch 低32位是事务编号
     }
     public static long getCounterFromZxid(long zxid) {
         return zxid & 0xffffffffL;

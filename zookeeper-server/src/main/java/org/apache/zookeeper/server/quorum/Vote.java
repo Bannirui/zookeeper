@@ -33,10 +33,10 @@ public class Vote {
 
     public Vote(long id, long zxid, long peerEpoch) {
         this.version = 0x0;
-        this.id = id;
-        this.zxid = zxid;
+        this.id = id; // sid
+        this.zxid = zxid; // zxid
         this.electionEpoch = -1;
-        this.peerEpoch = peerEpoch;
+        this.peerEpoch = peerEpoch; // epoch
         this.state = ServerState.LOOKING;
     }
 
@@ -69,7 +69,7 @@ public class Vote {
 
     private final int version;
 
-    private final long id;
+    private final long id; // 给出投票的机器sid 标识着投票来自谁
 
     private final long zxid;
 

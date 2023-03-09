@@ -322,7 +322,7 @@ public class QuorumCnxManager {
             this.cnxTO = Integer.parseInt(cnxToValue);
         }
 
-        this.self = self;
+        this.self = self; // QuorumPeer实例
 
         this.mySid = mySid;
         this.socketTimeout = socketTimeout;
@@ -335,7 +335,7 @@ public class QuorumCnxManager {
         initializeConnectionExecutor(mySid, quorumCnxnThreadsSize);
 
         // Starts listener thread that waits for connection requests
-        listener = new Listener();
+        listener = new Listener(); // 初始化线程
         listener.setName("QuorumPeerListener");
     }
 
@@ -552,7 +552,7 @@ public class QuorumCnxManager {
             din = new DataInputStream(new BufferedInputStream(sock.getInputStream()));
 
             LOG.debug("Sync handling of connection request received from: {}", sock.getRemoteSocketAddress());
-            handleConnection(sock, din);
+            handleConnection(sock, din); // 接收到的来自其他节点的投票
         } catch (IOException e) {
             LOG.error("Exception handling connection, addr: {}, closing server connection", sock.getRemoteSocketAddress());
             LOG.debug("Exception details: ", e);
@@ -617,7 +617,6 @@ public class QuorumCnxManager {
                     return;
                 }
             }
-
             if (sid == QuorumPeer.OBSERVER_ID) {
                 /*
                  * Choose identifier at random. We need a value to identify
@@ -690,13 +689,13 @@ public class QuorumCnxManager {
         /*
          * If sending message to myself, then simply enqueue it (loopback).
          */
-        if (this.mySid == sid) {
+        if (this.mySid == sid) { // 投票发给自己的 不用走网络了 直接放到接收队列
             b.position(0);
             addToRecvQueue(new Message(b.duplicate(), sid));
             /*
              * Otherwise send to the corresponding thread to send.
              */
-        } else {
+        } else { // 发送队列里面的投票是要发送给别的节点的 走网络通信
             /*
              * Start a new connection if doesn't have one already.
              */
@@ -905,7 +904,7 @@ public class QuorumCnxManager {
 
         private final int portBindMaxRetry;
         private Runnable socketBindErrorHandler = () -> ServiceUtils.requestSystemExit(ExitCode.UNABLE_TO_BIND_QUORUM_PORT.getValue());
-        private List<ListenerHandler> listenerHandlers;
+        private List<ListenerHandler> listenerHandlers; // 监听端口 选主投票信息
         private final AtomicBoolean socketException;
 
 
@@ -944,15 +943,26 @@ public class QuorumCnxManager {
         public void run() {
             if (!shutdown) {
                 LOG.debug("Listener thread started, myId: {}", self.getId());
+                /**
+                 * 投票端口
+                 * 在配置文件中有服务器的通信信息 ip:事务端口:心跳端口:投票端口
+                 * 当前要监听在投票端口等投票数据
+                 */
                 Set<InetSocketAddress> addresses;
 
-                if (self.getQuorumListenOnAllIPs()) {
+                // self就是QuorumPeer实例
+                if (self.getQuorumListenOnAllIPs()) { // 默认值false
                     addresses = self.getElectionAddress().getWildcardAddresses();
                 } else {
+                    // 当前节点的投票端口
                     addresses = self.getElectionAddress().getAllAddresses();
                 }
 
                 CountDownLatch latch = new CountDownLatch(addresses.size());
+                /**
+                 * 监听在投票端口上
+                 * 负责接收其他节点的投票
+                 */
                 listenerHandlers = addresses.stream().map(address ->
                                 new ListenerHandler(address, self.shouldUsePortUnification(), self.isSslQuorum(), latch))
                         .collect(Collectors.toList());
@@ -1023,7 +1033,7 @@ public class QuorumCnxManager {
 
             ListenerHandler(InetSocketAddress address, boolean portUnification, boolean sslQuorum,
                             CountDownLatch latch) {
-                this.address = address;
+                this.address = address; // 监听端口
                 this.portUnification = portUnification;
                 this.sslQuorum = sslQuorum;
                 this.latch = latch;
@@ -1071,7 +1081,7 @@ public class QuorumCnxManager {
                         LOG.info("{} is accepting connections now, my election bind port: {}", QuorumCnxManager.this.mySid, address.toString());
                         while (!shutdown) {
                             try {
-                                client = serverSocket.accept();
+                                client = serverSocket.accept(); // 有其他节点连接上自己 准备通信了
                                 setSockOpts(client);
                                 LOG.info("Received connection request from {}", client.getRemoteSocketAddress());
                                 // Receive and handle the connection request
@@ -1082,7 +1092,7 @@ public class QuorumCnxManager {
                                 if (quorumSaslAuthEnabled) {
                                     receiveConnectionAsync(client);
                                 } else {
-                                    receiveConnection(client);
+                                    receiveConnection(client); // 接收其他节点发送的数据 投票
                                 }
                                 numRetries = 0;
                             } catch (SocketTimeoutException e) {
