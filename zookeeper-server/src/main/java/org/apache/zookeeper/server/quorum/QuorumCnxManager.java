@@ -867,6 +867,11 @@ public class QuorumCnxManager {
             LOG.warn("We got a connection request from a server with our own ID. "
                      + "This should be either a configuration error, or a bug.");
         } else { // Otherwise start worker threads to receive data. // 大sid向小sid的一次通信 合法的 自己是服务端小sid 对方是客户端大sid
+            /**
+             * 此刻双方使用Socket的连接方向是正确的
+             * 也就是说以后的投票通信就用这个Socket了
+             * 将Socket缓存到SenderWorker线程和RecvWorker线程里面 以后专门负责双方的投票通信
+             */
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
@@ -877,7 +882,7 @@ public class QuorumCnxManager {
                 vsw.finish();
             }
 
-            senderWorkerMap.put(sid, sw); // 哪些节点sid比自己大 他们是发送方
+            senderWorkerMap.put(sid, sw); // 维护着跟对方sid通信使用的Socket
 
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
@@ -1699,6 +1704,8 @@ public class QuorumCnxManager {
                     /**
                      * Reads the first int to determine the length of the
                      * message
+                     *
+                     * 持续接收Socket上发来的投票
                      */
                     int length = din.readInt();
                     if (length <= 0 || length > PACKETMAXSIZE) {
