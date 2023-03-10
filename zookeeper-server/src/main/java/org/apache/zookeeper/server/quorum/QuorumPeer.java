@@ -1270,6 +1270,8 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                  * 然后交叉比较
                  *   - 留着自己拿着这个投票和别人的pk
                  *   - 给别人让他们拿着自己的和这个pk
+                 *
+                 * 初始化刚启动的时候[myid, 0, 0]
                  */
                 currentVote = new Vote(myid, getLastLoggedZxid(), getCurrentEpoch());
             }
@@ -1441,8 +1443,9 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
                 /**
                  * 启动messenger中的两个线程
-                 *   - ws
-                 *   - wr
+                 *   - wsThread发送线程 负责执行ws发送任务
+                 *   - wrThread接收线程 负责执行wr接收任务
+                 * 这两个线程是使用QuorumCnxManager网络通信处理网络IO数据包的
                  */
                 fle.start(); // 启动选举
                 le = fle;
@@ -1583,6 +1586,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                             reconfigFlagClear();
                             if (shuttingDownLE) {
                                 shuttingDownLE = false;
+                                // 开启选主算法组件
                                 startLeaderElection();
                             }
                             // 设置当前投票 进行新一轮的选举

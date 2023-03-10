@@ -729,6 +729,12 @@ public class FastLeaderElection implements Election {
 
         sendqueue = new LinkedBlockingQueue<ToSend>(); // 发送队列
         recvqueue = new LinkedBlockingQueue<Notification>(); // 接收队列
+        /**
+         * 创建messenger中的两个线程
+         *   - wsThread发送线程 负责执行ws发送任务
+         *   - wrThread接收线程 负责执行wr接收任务
+         * 这两个线程是使用QuorumCnxManager网络通信处理网络IO数据包的
+         */
         this.messenger = new Messenger(manager);
     }
 

@@ -922,7 +922,12 @@ public class QuorumCnxManager {
              */
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
             addToSendQueue(bq, b);
-            // 要给sid发送数据 要发的数据都在queueSendMap中缓存着呢
+            /**
+             * 要给sid发送数据 要发的数据都在queueSendMap中缓存着呢
+             * 这个地方就是首次建立客户端跟服务端连接的时机
+             * 如果已经建立了连接 那么连接信息缓存在senderWorkerMap中
+             * 如果还没建立连接 刚好借着这个时机把连接建立好然后放在senderWorkerMap中
+             */
             connectOne(sid);
         }
     }
