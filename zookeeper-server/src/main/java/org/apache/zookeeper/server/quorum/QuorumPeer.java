@@ -657,7 +657,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     /**
      * This is who I think the leader currently is.
      */
-    private volatile Vote currentVote; // 服务器节点的投票
+    private volatile Vote currentVote; // 服务器节点的投票 选主完成后这个Vote投票就是给leader的投票
 
     public synchronized Vote getCurrentVote() {
         return currentVote;
@@ -1430,6 +1430,9 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                 /**
                  * 监听在投票端口
                  * 负责接收投票
+                 * 两个线程负责通信处理
+                 *   - RecvWorker线程负责接收数据 把数据放入recvQueue队列
+                 *   - SenderWorker线程负责发送数据 待发送的数据缓存在queueSendMap中
                  */
                 listener.start();
                 // 快速选举算法
@@ -1564,7 +1567,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                                 shuttingDownLE = false;
                                 startLeaderElection();
                             }
-                            setCurrentVote(makeLEStrategy().lookForLeader());
+                            setCurrentVote(makeLEStrategy().lookForLeader()); // 选举出leader
                         } catch (Exception e) {
                             LOG.warn("Unexpected exception", e);
                             setPeerState(ServerState.LOOKING);
@@ -1621,7 +1624,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                         updateServerState();
                     }
                     break;
-                case LEADING:
+                case LEADING: // 当自己决胜为leader后进入当前分支
                     LOG.info("LEADING");
                     try {
                         setLeader(makeLeader(logFactory));
@@ -1736,6 +1739,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
 
     public synchronized Set<Long> getCurrentAndNextConfigVoters() {
+        // 集群中参与选主投票的节点的sid
         Set<Long> voterIds = new HashSet<Long>(getQuorumVerifier().getVotingMembers().keySet());
         if (getLastSeenQuorumVerifier() != null) {
             voterIds.addAll(getLastSeenQuorumVerifier().getVotingMembers().keySet());

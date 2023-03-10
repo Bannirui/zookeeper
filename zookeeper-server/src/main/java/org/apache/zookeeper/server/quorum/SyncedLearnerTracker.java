@@ -52,7 +52,7 @@ public class SyncedLearnerTracker {
 
     public boolean hasAllQuorums() {
         for (QuorumVerifierAcksetPair qvAckset : qvAcksetPairs) {
-            if (!qvAckset.getQuorumVerifier().containsQuorum(qvAckset.getAckset())) {
+            if (!qvAckset.getQuorumVerifier().containsQuorum(qvAckset.getAckset())) { // qcAckSet>half 本质就是投票给leader的人数是否过半
                 return false;
             }
         }

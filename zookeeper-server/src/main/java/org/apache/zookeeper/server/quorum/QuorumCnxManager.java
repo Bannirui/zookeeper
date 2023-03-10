@@ -163,12 +163,17 @@ public class QuorumCnxManager {
      *   - 他们是客户端 大sid
      * 他们主动发送数据给我
      * 记录着发送发 也就是一个发送线程
+     *
+     * 消息发送器
+     * 按照sid进行分组
+     * 每个SendWorker都单独对应一台服务器
      */
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
 
     /**
-     * 发送队列
+     * 待发送队列 用于保存待发送消息
      * 要发送给sid服务器节点的数据都聚合在一起
+     * 按照sid进行分组 为每台服务器分配一个单独的队列
      */
     final ConcurrentHashMap<Long, BlockingQueue<ByteBuffer>> queueSendMap;
     final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
@@ -219,7 +224,7 @@ public class QuorumCnxManager {
         }
 
         ByteBuffer buffer;
-        long sid;
+        long sid; // 投票接收方的sid
 
     }
 
@@ -387,6 +392,13 @@ public class QuorumCnxManager {
      * 向谁发起通信连接
      *   - electionAddr 对方的投票端口
      *   - sid 对方的sid
+     * 向对方投票端口发送数据
+     * 告知对方自己的选举投票端口信息(ip:端口)
+     */
+    /**
+     * |       8      |        8       |    4     |           x           |
+     * |--------------|----------------|----------|-----------------------|
+     * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
      */
     public void initiateConnection(final MultipleAddresses electionAddr, final Long sid) {
         // 向别人发起连接 自己是客户端
@@ -426,6 +438,7 @@ public class QuorumCnxManager {
 
         try {
             // 自己作为客户端已经连接上了对方服务端 准备发数据了
+            // 发什么 把自己的选举投票地址信息(ip:port)发送给服务端sid这个节点
             startConnection(sock, sid);
         } catch (IOException e) {
             LOG.error(
@@ -449,6 +462,12 @@ public class QuorumCnxManager {
             return true;
         }
         try {
+            // 向线程池提交了一个异步任务
+            /**
+             * |       8      |        8       |    4    |       x       |
+             * |--------------|----------------|---------|---------------|
+             * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(投票地址) |
+             */
             connectionExecutor.execute(new QuorumConnectionReqThread(electionAddr, sid));
             connectionThreadCnt.incrementAndGet();
         } catch (Throwable e) {
@@ -466,8 +485,8 @@ public class QuorumCnxManager {
      * Thread to send connection request to peer server.
      */
     private class QuorumConnectionReqThread extends ZooKeeperThread {
-        final MultipleAddresses electionAddr;
-        final Long sid;
+        final MultipleAddresses electionAddr; // 向谁发起连接 对方连接地址
+        final Long sid; // 向谁发起连接 对方sid是多少
         QuorumConnectionReqThread(final MultipleAddresses electionAddr, final Long sid) {
             super("QuorumConnectionReqThread-" + sid);
             this.electionAddr = electionAddr;
@@ -494,6 +513,7 @@ public class QuorumCnxManager {
      * 客户端向服务端发送数据
      *   - socket 自己客户端的Socket
      *   - 向谁发送数据 sid指向就是对方
+     *   - 把自己的选举投票地址信息(ip:port)发送给sid这个节点
      */
     private boolean startConnection(Socket sock, Long sid) throws IOException {
         DataOutputStream dout = null;
@@ -514,10 +534,11 @@ public class QuorumCnxManager {
             // understand the protocol version we use to avoid multiple partitions. see ZOOKEEPER-3720
             long protocolVersion = self.isMultiAddressEnabled() ? PROTOCOL_VERSION_V2 : PROTOCOL_VERSION_V1;
             /**
-             * |    8    |  8  |    4    |       x       |
-             * |---------|-----|---------|---------------|
-             * | 协议版本 | sid | 数据长度x | 数据(投票地址) |
-             *
+             * |       8      |        8       |    4     |           x           |
+             * |--------------|----------------|----------|-----------------------|
+             * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
+             */
+            /**
              * 这样一个数据包投递给服务端
              * 服务端收到后再解析确认数据来自谁 什么数据内容
              */
@@ -615,7 +636,24 @@ public class QuorumCnxManager {
             din = new DataInputStream(new BufferedInputStream(sock.getInputStream()));
 
             LOG.debug("Sync handling of connection request received from: {}", sock.getRemoteSocketAddress());
-            // 读取投票
+            /**
+             * 读取数据
+             *   - 节点间投票端口网络通信发送的第一个包不是投票
+             *   - 之后发送的包是投票
+             */
+            /**
+             * 新建连接后的第一个包
+             * |       8      |        8       |    4     |           x           |
+             * |--------------|----------------|----------|-----------------------|
+             * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
+             */
+            /**
+             * FLE中的sendWorker线程负责处理要发送的投票
+             *
+             * |         4          |      8    |      8      |     8     |       8      |       4      |     4    | ?  |
+             * |--------------------|-----------|-------------|-----------|--------------|--------------|---------|-----|
+             * | 消息发送人的状态 选主 | 被推举的sid | 被推举的zxid | 时钟 任期号 | 被推举的epoch | 版本号(固定值) | 数据长度 | 数据 |
+             */
             handleConnection(sock, din);
         } catch (IOException e) {
             LOG.error("Exception handling connection, addr: {}, closing server connection", sock.getRemoteSocketAddress());
@@ -664,12 +702,26 @@ public class QuorumCnxManager {
 
         try {
             /**
-             * |    8    |  8  |    4    |       x       |
-             * |---------|-----|---------|---------------|
-             * | 协议版本 | sid | 数据长度x | 数据(投票地址) |
+             * 读取数据
+             *   - 节点间投票端口网络通信发送的第一个包不是投票
+             *   - 之后发送的包是投票
+             */
+            /**
+             * 新建连接后的第一个包
+             * |       8      |        8       |    4     |           x           |
+             * |--------------|----------------|----------|-----------------------|
+             * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
+             */
+            /**
+             * FLE中的sendWorker线程负责处理要发送的投票
              *
-             * 这样一个数据包投递给服务端
-             * 服务端收到后再解析确认数据来自谁 什么数据内容
+             * |         4          |      8    |      8      |     8     |       8      |       4      |     4    | ?  |
+             * |--------------------|-----------|-------------|-----------|--------------|--------------|---------|-----|
+             * | 消息发送人的状态 选主 | 被推举的sid | 被推举的zxid | 时钟 任期号 | 被推举的epoch | 版本号(固定值) | 数据长度 | 数据 |
+             */
+            /**
+             * 这边做的工作相当于是在使用投票端口之前先验证和剔除关闭不是参与投票的Socket
+             * 使用投票端口的首次收发是一个定义好的包 通过验证这个包确定彼此双方以后通信内容真的是用来投票的
              */
             protocolVersion = din.readLong();
             if (protocolVersion >= 0) { // this is a server id and not a protocol version
@@ -791,7 +843,12 @@ public class QuorumCnxManager {
 
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
-            // 启动两个线程
+            /**
+             * 启动两个线程
+             * 为什么没有直接启动线程 让负责接收消息的线程直接轮询监听这投票端口的数据
+             * 而是前面做了一堆工作
+             * 原因相当于是在正式使用投票端口之前先对通信方 或者说使用这个端口的连接进行验证 保证使用这个端口的都是真正进行投票的ZK节点
+             */
             sw.start();
             rw.start();
         }
@@ -800,23 +857,34 @@ public class QuorumCnxManager {
     /**
      * Processes invoke this message to queue a message to send. Currently,
      * only leader election uses it.
+     *
+     *
+     * sid 发送给谁 消息接收方的sid
+     * b 发送什么数据 封装号的投票
      */
     public void toSend(Long sid, ByteBuffer b) {
         /*
          * If sending message to myself, then simply enqueue it (loopback).
          */
-        if (this.mySid == sid) { // 投票发给自己的 不用走网络了 直接放到接收队列
+        if (this.mySid == sid) { // FLE算法发送队列里面的投票 是要发给自己的 不用走网络了 直接放到接收队列
             b.position(0);
             addToRecvQueue(new Message(b.duplicate(), sid));
             /*
              * Otherwise send to the corresponding thread to send.
              */
-        } else { // 发送队列里面的投票是要发送给别的节点的 走网络通信
+        } else { // FLE算法发送队列里面的投票 是要发送给别的节点的 走网络通信
             /*
              * Start a new connection if doesn't have one already.
              */
+            /**
+             * queueSendMap是待发送队列
+             * 现在要给sid发送数据
+             * 可能之前也屯了数据还没发
+             * 现在这个时机看一下 以前有数据没发 就把现在要发的数据追加上去
+             */
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
             addToSendQueue(bq, b);
+            // 要给sid发送数据 要发的数据都在queueSendMap中缓存着呢
             connectOne(sid);
         }
     }
@@ -835,7 +903,7 @@ public class QuorumCnxManager {
      *    - electionAddr指向的是对方开放的端口
      */
     synchronized boolean connectOne(long sid, MultipleAddresses electionAddr) {
-        if (senderWorkerMap.get(sid) != null) {
+        if (senderWorkerMap.get(sid) != null) { // 有数据要发送给sid
             LOG.debug("There is a connection already for server {}", sid);
             if (self.isMultiAddressEnabled() && electionAddr.size() > 1 && self.isMultiAddressReachabilityCheckEnabled()) {
                 // since ZOOKEEPER-3188 we can use multiple election addresses to reach a server. It is possible, that the
@@ -850,9 +918,15 @@ public class QuorumCnxManager {
         // the socket connection timeouts or the SSL handshake takes too long and don't want
         // to keep the rest of the connections to wait
         /**
+         * 还没有数据要往sid上发送
          * 向谁发起通信连接
          *   - electionAddr 对方的选举端口
          *   - 对方的sid
+         * 也就是说两个节点间首次通信时候发送的一个包是这样的
+         *
+         * |       8      |        8       |    4    |       x       |
+         * |--------------|----------------|---------|---------------|
+         * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(投票地址) |
          */
         return initiateConnectionAsync(electionAddr, sid);
     }
@@ -864,7 +938,7 @@ public class QuorumCnxManager {
      *  @param sid  server id
      */
     synchronized void connectOne(long sid) {
-        if (senderWorkerMap.get(sid) != null) {
+        if (senderWorkerMap.get(sid) != null) { // 是有待发数据要发给sid的
             LOG.debug("There is a connection already for server {}", sid);
             if (self.isMultiAddressEnabled() && self.isMultiAddressReachabilityCheckEnabled()) {
                 // since ZOOKEEPER-3188 we can use multiple election addresses to reach a server. It is possible, that the
@@ -878,7 +952,7 @@ public class QuorumCnxManager {
             boolean knownId = false;
             // Resolve hostname for the remote server before attempting to
             // connect in case the underlying ip address has changed.
-            self.recreateSocketAddresses(sid);
+            self.recreateSocketAddresses(sid); // 要给sid发送数据 自己就是Socket的客户端 sid就是Socket的服务端
             Map<Long, QuorumPeer.QuorumServer> lastCommittedView = self.getView();
             QuorumVerifier lastSeenQV = self.getLastSeenQuorumVerifier();
             Map<Long, QuorumPeer.QuorumServer> lastProposedView = lastSeenQV.getAllMembers();
@@ -1401,6 +1475,12 @@ public class QuorumCnxManager {
                 LOG.error("BufferUnderflowException ", be);
                 return;
             }
+            // 通过Socket发送出去
+            /**
+             * |    4    |  ?  |
+             * |---------|-----|
+             * | 数据长度 | 数据 |
+             */
             dout.writeInt(b.capacity());
             dout.write(b.array());
             dout.flush();
@@ -1426,7 +1506,12 @@ public class QuorumCnxManager {
                  * message than that stored in lastMessage. To avoid sending
                  * stale message, we should send the message in the send queue.
                  */
-                BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid); // 发送给谁 要发送的数据
+                /**
+                 * queueSendMap里面缓存所有要发送的数据
+                 * 要发给谁 也就是接收方sid
+                 * 它的所有数据都放在hash表的value队列里面
+                 */
+                BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid);
                 if (bq == null || isSendQueueEmpty(bq)) {
                     ByteBuffer b = lastMessageSent.get(sid);
                     if (b != null) {
@@ -1445,7 +1530,12 @@ public class QuorumCnxManager {
 
                     ByteBuffer b = null;
                     try {
-                        BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid); // 要发送什么数据给谁 数据的存储结构是循环队列
+                        /**
+                         * queueSendMap里面缓存所有要发送的数据
+                         * 要发给谁 也就是接收方sid
+                         * 它的所有数据都放在hash表的value队列里面
+                         */
+                        BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid);
                         if (bq != null) {
                             b = pollSendQueue(bq, 1000, TimeUnit.MILLISECONDS); // 超时去取数据
                         } else {
@@ -1453,9 +1543,9 @@ public class QuorumCnxManager {
                             break;
                         }
 
-                        if (b != null) {
-                            lastMessageSent.put(sid, b);
-                            send(b);
+                        if (b != null) { // b是当前节点要发送给sid的数据
+                            lastMessageSent.put(sid, b); // 记录一下上一次发送出去的数据
+                            send(b); // 发送数据
                         }
                     } catch (InterruptedException e) {
                         LOG.warn("Interrupted while waiting for message on queue", e);
