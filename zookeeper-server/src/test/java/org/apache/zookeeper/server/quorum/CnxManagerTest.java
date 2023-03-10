@@ -143,6 +143,9 @@ public class CnxManagerTest extends ZKTestCase {
                     return;
                 }
 
+                /**
+                 * 节点作为客户端跟sid这个服务端建立在投票端口的连接
+                 */
                 cnxManager.testInitiateConnection(sid);
 
                 m = cnxManager.pollRecvQueue(3000, TimeUnit.MILLISECONDS);

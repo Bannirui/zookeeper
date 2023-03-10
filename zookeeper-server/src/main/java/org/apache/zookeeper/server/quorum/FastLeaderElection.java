@@ -740,6 +740,7 @@ public class FastLeaderElection implements Election {
          * 启动messenger中的两个线程
          *   - wsThread发送线程 负责执行ws发送任务
          *   - wrThread接收线程 负责执行wr接收任务
+         * 这两个线程是使用QuorumCnxManager网络通信处理网络IO数据包的
          */
         this.messenger.start();
     }
@@ -1069,6 +1070,15 @@ public class FastLeaderElection implements Election {
                     if (manager.haveDelivered()) { // 当前节点没有待发送投票
                         sendNotifications(); // 再次向节点发送一下自己的投票(自己投自己当Leader)
                     } else {
+                        /**
+                         * 节点刚启动的时候这个时机首次建立投票端口的连接
+                         * 发送一个验证包
+                         */
+                        /**
+                         * |       8      |        8       |    4     |           x           |
+                         * |--------------|----------------|----------|-----------------------|
+                         * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
+                         */
                         manager.connectAll(); // 尝试和每个节点建立连接
                     }
 

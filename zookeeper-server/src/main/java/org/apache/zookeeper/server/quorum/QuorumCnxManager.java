@@ -144,7 +144,7 @@ public class QuorumCnxManager {
     final int socketTimeout;
     final Map<Long, QuorumPeer.QuorumServer> view;
     final boolean listenOnAllIPs;
-    private ThreadPoolExecutor connectionExecutor;
+    private ThreadPoolExecutor connectionExecutor; // 用来建立投票端口首次通信
     private final Set<Long> inprogressConnections = Collections.synchronizedSet(new HashSet<>());
     private QuorumAuthServer authServer;
     private QuorumAuthLearner authLearner;
@@ -158,15 +158,10 @@ public class QuorumCnxManager {
      * Mapping from Peer to Thread number
      */
     /**
-     * 维护着哪些节点跟自己通信
-     *   - 自己是服务端 小sid
-     *   - 他们是客户端 大sid
-     * 他们主动发送数据给我
-     * 记录着发送发 也就是一个发送线程
-     *
      * 消息发送器
      * 按照sid进行分组
      * 每个SendWorker都单独对应一台服务器
+     * 也就是说我如果有数据要发送给sid 这件事情由维护着的SendWorker这个线程来负责
      */
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
 
@@ -350,6 +345,11 @@ public class QuorumCnxManager {
         this.authLearner = authLearner;
         this.quorumSaslAuthEnabled = quorumSaslAuthEnabled;
 
+        /**
+         * 创建了一个线程池
+         * 这个线程池用来接收提交的任务
+         * 任务主体是作为客户端建立跟服务端投票端口的连接
+         */
         initializeConnectionExecutor(mySid, quorumCnxnThreadsSize);
 
         // Starts listener thread that waits for connection requests
@@ -388,12 +388,15 @@ public class QuorumCnxManager {
      * Then we perform the initiation protocol.
      * If this server has initiated the connection, then it gives up on the
      * connection if it loses challenge. Otherwise, it keeps the connection.
-     *
-     * 向谁发起通信连接
-     *   - electionAddr 对方的投票端口
-     *   - sid 对方的sid
-     * 向对方投票端口发送数据
-     * 告知对方自己的选举投票端口信息(ip:端口)
+     */
+    /**
+     * 客户端跟服务端在投票端口建立连接的时机
+     *   - electionAddr投票地址 向它发送connect请求
+     *   - sid 服务端 它已经作为服务端监听在投票端口了
+     *   - 建立连接之后还要发一份数据给服务端 双方接着约定好的数据格式确认使用投票端口连接的双方是真的用来投票的
+     * 发送的数据内容为
+     *   - 把自己的选举投票地址信息(ip:port)发送给sid这个节点
+     * 发送的数据格式为
      */
     /**
      * |       8      |        8       |    4     |           x           |
@@ -437,8 +440,20 @@ public class QuorumCnxManager {
         }
 
         try {
-            // 自己作为客户端已经连接上了对方服务端 准备发数据了
-            // 发什么 把自己的选举投票地址信息(ip:port)发送给服务端sid这个节点
+            /**
+             * 客户端跟服务端在投票端口建立连接的时机
+             *   - socket 自己客户端的Socket
+             *   - sid 服务端 它已经作为服务端监听在投票端口了
+             *   - 建立连接之后还要发一份数据给服务端 双方接着约定好的数据格式确认使用投票端口连接的双方是真的用来投票的
+             * 发送的数据内容为
+             *   - 把自己的选举投票地址信息(ip:port)发送给sid这个节点
+             * 发送的数据格式为
+             */
+            /**
+             * |       8      |        8       |    4     |           x           |
+             * |--------------|----------------|----------|-----------------------|
+             * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
+             */
             startConnection(sock, sid);
         } catch (IOException e) {
             LOG.error(
@@ -462,7 +477,10 @@ public class QuorumCnxManager {
             return true;
         }
         try {
-            // 向线程池提交了一个异步任务
+            /**
+             * 向线程池提交了一个异步任务
+             * 这个异步任务负责跟electionAddr建立连接并向它发送如下约定的包 保证彼此这个连接是迎来投票的
+             */
             /**
              * |       8      |        8       |    4    |       x       |
              * |--------------|----------------|---------|---------------|
@@ -497,9 +515,18 @@ public class QuorumCnxManager {
         public void run() {
             try {
                 /**
-                 * 向谁发起通信连接
-                 *   - electionAddr对方的投票端口
-                 *   - 对方的sid
+                 * 客户端跟服务端在投票端口建立连接的时机
+                 *   - electionAddr投票地址 向它发送connect请求
+                 *   - sid 服务端 它已经作为服务端监听在投票端口了
+                 *   - 建立连接之后还要发一份数据给服务端 双方接着约定好的数据格式确认使用投票端口连接的双方是真的用来投票的
+                 * 发送的数据内容为
+                 *   - 把自己的选举投票地址信息(ip:port)发送给sid这个节点
+                 * 发送的数据格式为
+                 */
+                /**
+                 * |       8      |        8       |    4     |           x           |
+                 * |--------------|----------------|----------|-----------------------|
+                 * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
                  */
                 initiateConnection(electionAddr, sid);
             } finally {
@@ -510,10 +537,18 @@ public class QuorumCnxManager {
     }
 
     /**
-     * 客户端向服务端发送数据
+     * 客户端跟服务端在投票端口建立连接的时机
      *   - socket 自己客户端的Socket
-     *   - 向谁发送数据 sid指向就是对方
+     *   - sid 服务端 它已经作为服务端监听在投票端口了
+     *   - 建立连接之后还要发一份数据给服务端 双方接着约定好的数据格式确认使用投票端口连接的双方是真的用来投票的
+     * 发送的数据内容为
      *   - 把自己的选举投票地址信息(ip:port)发送给sid这个节点
+     * 发送的数据格式为
+     */
+    /**
+     * |       8      |        8       |    4     |           x           |
+     * |--------------|----------------|----------|-----------------------|
+     * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(sid的选举投票地址) |
      */
     private boolean startConnection(Socket sock, Long sid) throws IOException {
         DataOutputStream dout = null;
@@ -594,7 +629,7 @@ public class QuorumCnxManager {
              * 判定时机留着任务线程取到队列任务的时候进行
              */
             LOG.debug("Have larger server identifier, so keeping the connection: (myId:{} --> sid:{})", self.getId(), sid);
-            SendWorker sw = new SendWorker(sock, sid);
+            SendWorker sw = new SendWorker(sock, sid); // 给sid这个节点发送数据这件事情由sw这个线程负责
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
 
@@ -604,7 +639,10 @@ public class QuorumCnxManager {
                 vsw.finish();
             }
 
-            senderWorkerMap.put(sid, sw); // 给谁发送 发送什么
+            /**
+             * 给sid发送的数据这件事情由sw这个线程来负责
+             */
+            senderWorkerMap.put(sid, sw);
 
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
@@ -903,7 +941,13 @@ public class QuorumCnxManager {
      *    - electionAddr指向的是对方开放的端口
      */
     synchronized boolean connectOne(long sid, MultipleAddresses electionAddr) {
-        if (senderWorkerMap.get(sid) != null) { // 有数据要发送给sid
+        /**
+         * senderWorkerMap维护着通信映射关系
+         * 这个hash表没有映射的话
+         * 意味着自己作为客户端而言 还没有建立好跟服务端sid在投票端口上的连接
+         * 在这个时机触发客户端跟服务端之间的建立
+         */
+        if (senderWorkerMap.get(sid) != null) {
             LOG.debug("There is a connection already for server {}", sid);
             if (self.isMultiAddressEnabled() && electionAddr.size() > 1 && self.isMultiAddressReachabilityCheckEnabled()) {
                 // since ZOOKEEPER-3188 we can use multiple election addresses to reach a server. It is possible, that the
@@ -923,7 +967,8 @@ public class QuorumCnxManager {
          *   - electionAddr 对方的选举端口
          *   - 对方的sid
          * 也就是说两个节点间首次通信时候发送的一个包是这样的
-         *
+         */
+        /**
          * |       8      |        8       |    4    |       x       |
          * |--------------|----------------|---------|---------------|
          * | 协议版本(负数) | sid 是谁发的数据 | 数据长度x | 数据(投票地址) |

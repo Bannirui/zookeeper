@@ -1428,11 +1428,12 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             QuorumCnxManager.Listener listener = qcm.listener; // QuorumCnxManager构造时候实例化了listener线程
             if (listener != null) {
                 /**
-                 * 监听在投票端口
+                 * 监听在投票端口 也就是说每个节点都启动了对投票端口的监听
                  * 负责接收投票
                  * 两个线程负责通信处理
                  *   - RecvWorker线程负责接收数据 把数据放入recvQueue队列
                  *   - SenderWorker线程负责发送数据 待发送的数据缓存在queueSendMap中
+                 * 那么我们要开始关注什么时候节点充当客户端向服务端发起连接
                  */
                 listener.start();
                 // 快速选举算法
